@@ -76,10 +76,34 @@ casmi-2026/
       these are common compounds that also appear elsewhere in training, but
       confirms the pipeline mechanics are correct). First real submission
       written to `submissions/baseline_v1.csv`, validated against
-      `sample_submission.csv`.
-- [ ] Formula prediction filter added
-- [ ] Domain-adapted spectral embeddings added
-- [ ] Class 2 retrieval/rerank pipeline
+      `sample_submission.csv`. **Real public leaderboard score: 0.063** —
+      badly under even the ~0.15-0.23 "library-only ceiling" public notebooks
+      reported. A harder local validation (structures entirely absent from
+      the library, so the real Class 2/3 failure mode) confirmed why:
+      **0.0000 MRR@25** — the pipeline never abstains, it confidently guesses
+      wrong every time a structure isn't literally already in the library.
+- [x] Candidate-pool expansion (Phase 2, in progress) — see `src/candidates.py`,
+      `src/propagation.py`, `src/pipeline_v2.py`. Expands guesses beyond the
+      training library to COCONUT (~729k combined candidates, natural
+      products + training structures, fingerprinted and cached), ranking
+      candidates via `max_a sim(anchor)^4 * Tanimoto(candidate, anchor)`
+      against spectrally-similar library analogs (the recipe public
+      notebooks converged on). Two validated fixes on the same hard,
+      structure-absent-from-library validation set:
+      - Candidate expansion alone: 0.0000 -> 0.0145 MRR@25.
+      - + entropy-weighted similarity (Li et al. 2021, replacing plain
+        cosine — diagnosed directly here: plain cosine gave "0.99 similar"
+        anchors that were chemically unrelated, Tanimoto ~0.1, because a
+        single shared dominant fragment peak dominates raw cosine
+        regardless of the rest of the spectrum): 0.0145 -> **0.0211**.
+      Runtime: ~7.5s/molecule, ~50 min projected for the real test set —
+      comfortably inside the 9h Kaggle limit. Still well under the ~0.52
+      research suggested is achievable on a comparable setup — likely next
+      levers: tuning the mass window / propagation exponent, molecular
+      formula filtering, and reconsidering how spectra are aggregated
+      before ranking. Not yet packaged into a Kaggle kernel or submitted.
+- [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
+      above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration
 - [ ] Final ensemble + validation
 

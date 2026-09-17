@@ -14,6 +14,37 @@ import numpy as np
 import scipy.sparse as sp
 
 
+def entropy_weight(intensities: np.ndarray) -> np.ndarray:
+    """Reweight intensities per Li et al. 2021: plain cosine similarity is
+    dominated by whichever single peak has the highest intensity product,
+    so two chemically unrelated spectra that happen to share one strong
+    generic fragment (a water loss, a common small ion) can score
+    deceptively high regardless of how the rest of the spectrum -- and the
+    underlying structure -- differs. Diagnosed directly in this pipeline:
+    a held-out validation found "0.99 similar" anchors whose true Tanimoto
+    chemical similarity to the query was ~0.1, and every top public
+    notebook for this competition uses this exact reweighting instead of
+    raw cosine.
+
+    Low-entropy (peaky, one-or-few-peaks-dominant) spectra get compressed
+    by intensity ** w with w = 0.25 + 0.25*S (S = Shannon entropy of the
+    normalized intensities), which pulls the dominant peak's influence
+    down and lets the rest of the spectrum's shape matter; spectra that
+    are already reasonably flat (S >= 3) are left alone.
+    """
+    intensities = np.asarray(intensities, dtype=np.float64)
+    total = intensities.sum()
+    if total <= 0:
+        return intensities
+    p = intensities / total
+    nonzero = p > 0
+    entropy = -np.sum(p[nonzero] * np.log(p[nonzero]))
+    if entropy >= 3.0:
+        return intensities
+    w = 0.25 + 0.25 * entropy
+    return intensities**w
+
+
 def _match_peaks(mzs_a: np.ndarray, mzs_b: np.ndarray, tol_da: float) -> list[tuple[int, int]]:
     """Greedy one-to-one peak matching within +/- tol_da, highest combined
     intensity pairs matched first. O(n log n + n*k) for k = avg matches per peak.
@@ -40,6 +71,7 @@ def cosine_similarity(
     if len(mzs_a) == 0 or len(mzs_b) == 0:
         return 0.0
 
+    ints_a, ints_b = entropy_weight(ints_a), entropy_weight(ints_b)
     candidates = _match_peaks(mzs_a, mzs_b, tol_da)
     if not candidates:
         return 0.0
@@ -70,17 +102,36 @@ def cosine_similarity(
 
 def bin_query_vector(mzs: np.ndarray, intensities: np.ndarray, bin_width: float, n_bins: int) -> np.ndarray:
     """Bin one spectrum into a dense, L2-normalized vector for the coarse
-    prefilter. sqrt-transformed intensities to damp the dominance of the
-    single base peak, matching common practice for spectral cosine scoring.
+    prefilter. Entropy-weighted (see entropy_weight) so the coarse screen
+    uses the same damping of dominant-peak dominance as the exact rescoring
+    stage -- otherwise a candidate the fine scorer would reject for exactly
+    that reason could still win the coarse screen and crowd out a real one.
     """
     cols = np.clip((np.asarray(mzs) / bin_width).astype(np.int64), 0, n_bins - 1)
-    vals = np.sqrt(np.clip(np.asarray(intensities, dtype=np.float64), 0, None))
+    vals = entropy_weight(np.clip(np.asarray(intensities, dtype=np.float64), 0, None))
     vec = np.zeros(n_bins, dtype=np.float32)
     np.add.at(vec, cols, vals)
     norm = np.linalg.norm(vec)
     if norm > 0:
         vec /= norm
     return vec
+
+
+def _segment_entropy_weight(offsets: np.ndarray, ints_flat: np.ndarray) -> np.ndarray:
+    """entropy_weight applied per-spectrum to a CSR-style flattened peak
+    array -- each spectrum's entropy is computed over its own peaks only,
+    not the whole flattened array.
+    """
+    row_idx = np.repeat(np.arange(len(offsets) - 1), np.diff(offsets))
+    seg_sum = np.add.reduceat(ints_flat, offsets[:-1])
+    seg_sum = np.where(seg_sum > 0, seg_sum, 1.0)
+
+    p = ints_flat / seg_sum[row_idx]
+    plogp = np.where(p > 0, -p * np.log(p), 0.0)
+    seg_entropy = np.add.reduceat(plogp, offsets[:-1])
+
+    w = np.where(seg_entropy >= 3.0, 1.0, 0.25 + 0.25 * seg_entropy)
+    return ints_flat ** w[row_idx]
 
 
 def build_binned_index(
@@ -98,7 +149,7 @@ def build_binned_index(
     n_spectra = len(offsets) - 1
     row = np.repeat(np.arange(n_spectra), np.diff(offsets))
     col = np.clip((mzs_flat / bin_width).astype(np.int64), 0, n_bins - 1)
-    val = np.sqrt(np.clip(ints_flat, 0, None)).astype(np.float32)
+    val = _segment_entropy_weight(offsets, np.clip(ints_flat, 0, None)).astype(np.float32)
 
     mat = sp.coo_matrix((val, (row, col)), shape=(n_spectra, n_bins)).tocsr()
     norms = np.sqrt(np.asarray(mat.multiply(mat).sum(axis=1))).ravel()
@@ -124,6 +175,7 @@ def modified_cosine_similarity(
     if len(mzs_a) == 0 or len(mzs_b) == 0:
         return 0.0
 
+    ints_a, ints_b = entropy_weight(ints_a), entropy_weight(ints_b)
     shift = precursor_a - precursor_b
     direct = _match_peaks(mzs_a, mzs_b, tol_da)
     shifted = _match_peaks(mzs_a, mzs_b + shift, tol_da) if abs(shift) > tol_da else []

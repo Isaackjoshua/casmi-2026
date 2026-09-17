@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .baseline import FINE_TOP_N, N_GUESSES, Library, score_spectrum
+from .baseline import FINE_TOP_N, N_GUESSES, Library, _global_fallback_candidates, score_spectrum
 from .metric import to_inchikey14
 from .propagation import CandidatePool, neutral_mass, propagate
 
@@ -55,8 +55,6 @@ def predict_molecule(spectra_rows: list[dict], lib: Library, pool: CandidatePool
 
 
 def predict_test_set(test_df: pd.DataFrame, lib: Library, pool: CandidatePool) -> dict[str, list[str]]:
-    from .baseline import _global_fallback_candidates  # fallback stays library-based; propagation found nothing
-
     predictions = {}
     n_fallback = 0
     for mid, group in test_df.groupby("molecule_id"):

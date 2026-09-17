@@ -37,7 +37,12 @@ FP_BITS = 2048
 _GENERATOR = None  # lazily created per worker process; not picklable to share across mp.Pool
 
 
-def _get_generator() -> rdFingerprintGenerator.FingerprintGenerator64:
+def _get_generator():
+    # No return-type annotation: the flattened Kaggle notebook build strips
+    # `from __future__ import annotations`, so annotations are evaluated
+    # eagerly -- rdFingerprintGenerator.FingerprintGenerator64 doesn't exist
+    # in the older rdkit wheel Kaggle's kernel installs (2024.3.2), and this
+    # crashed the whole run before it ever got past module load.
     global _GENERATOR
     if _GENERATOR is None:
         _GENERATOR = rdFingerprintGenerator.GetMorganGenerator(radius=FP_RADIUS, fpSize=FP_BITS)

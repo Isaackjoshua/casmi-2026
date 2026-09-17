@@ -3,6 +3,7 @@ data/processed/
 data/coconut/
 submissions/*.csv
 kaggle_kernel/
+kaggle_kernel_v2/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/

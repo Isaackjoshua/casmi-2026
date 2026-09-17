@@ -77,8 +77,14 @@ class CandidatePool:
         return len(self.exact_mass)
 
 
-def load_candidate_pool(path: str) -> CandidatePool:
-    df = pd.read_parquet(path).sort_values("exact_mass").reset_index(drop=True)
+def candidate_pool_from_df(df: pd.DataFrame) -> CandidatePool:
+    """df must have inchikey14, normalized_smiles, exact_mass, fingerprint
+    (packed bytes) columns -- shared by both the cached-parquet path
+    (load_candidate_pool) and building the pool inline inside a Kaggle
+    kernel run, where fingerprinting happens at runtime instead of being
+    precomputed.
+    """
+    df = df.sort_values("exact_mass").reset_index(drop=True)
     fp_words = np.stack([np.frombuffer(b, dtype=np.uint64) for b in df["fingerprint"]])
     popcount = np.bitwise_count(fp_words).sum(axis=1).astype(np.int64)
     return CandidatePool(
@@ -89,6 +95,10 @@ def load_candidate_pool(path: str) -> CandidatePool:
         popcount=popcount,
         index_by_key={k: i for i, k in enumerate(df["inchikey14"])},
     )
+
+
+def load_candidate_pool(path: str) -> CandidatePool:
+    return candidate_pool_from_df(pd.read_parquet(path))
 
 
 def propagate(

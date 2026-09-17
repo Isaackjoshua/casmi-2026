@@ -1,6 +1,7 @@
 kaggle
 pandas
 numpy
+scipy
 pyarrow
 scikit-learn
 rdkit

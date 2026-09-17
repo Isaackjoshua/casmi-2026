@@ -11,6 +11,7 @@ matchms finishes installing.
 from __future__ import annotations
 
 import numpy as np
+import scipy.sparse as sp
 
 
 def _match_peaks(mzs_a: np.ndarray, mzs_b: np.ndarray, tol_da: float) -> list[tuple[int, int]]:
@@ -55,6 +56,54 @@ def cosine_similarity(
 
     denom = np.sqrt(np.sum(ints_a**2)) * np.sqrt(np.sum(ints_b**2))
     return float(numerator / denom) if denom > 0 else 0.0
+
+
+# --- Vectorized coarse pre-filter -------------------------------------------
+#
+# Scoring every library spectrum with the exact peak-matching functions above
+# is too slow at real scale (2.5M library spectra x 1000s of test candidates).
+# These helpers build a cheap, approximate, binned-cosine index with scipy
+# sparse matrices so a whole library can be screened with one sparse
+# matrix-vector product per query, and only the top few hundred survivors go
+# through the expensive exact modified_cosine_similarity above.
+
+
+def bin_query_vector(mzs: np.ndarray, intensities: np.ndarray, bin_width: float, n_bins: int) -> np.ndarray:
+    """Bin one spectrum into a dense, L2-normalized vector for the coarse
+    prefilter. sqrt-transformed intensities to damp the dominance of the
+    single base peak, matching common practice for spectral cosine scoring.
+    """
+    cols = np.clip((np.asarray(mzs) / bin_width).astype(np.int64), 0, n_bins - 1)
+    vals = np.sqrt(np.clip(np.asarray(intensities, dtype=np.float64), 0, None))
+    vec = np.zeros(n_bins, dtype=np.float32)
+    np.add.at(vec, cols, vals)
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec /= norm
+    return vec
+
+
+def build_binned_index(
+    offsets: np.ndarray,
+    mzs_flat: np.ndarray,
+    ints_flat: np.ndarray,
+    bin_width: float,
+    n_bins: int,
+) -> sp.csr_matrix:
+    """Build a (n_spectra x n_bins) sparse, row-normalized matrix from a
+    CSR-style flattened spectra collection (see baseline.Library), so a
+    query's coarse similarity to every library spectrum is one sparse dot
+    product: `index.dot(query_vector)`.
+    """
+    n_spectra = len(offsets) - 1
+    row = np.repeat(np.arange(n_spectra), np.diff(offsets))
+    col = np.clip((mzs_flat / bin_width).astype(np.int64), 0, n_bins - 1)
+    val = np.sqrt(np.clip(ints_flat, 0, None)).astype(np.float32)
+
+    mat = sp.coo_matrix((val, (row, col)), shape=(n_spectra, n_bins)).tocsr()
+    norms = np.sqrt(np.asarray(mat.multiply(mat).sum(axis=1))).ravel()
+    norms[norms == 0] = 1.0
+    return sp.diags(1.0 / norms) @ mat
 
 
 def modified_cosine_similarity(

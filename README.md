@@ -61,11 +61,37 @@ casmi-2026/
 
 ## Current status
 
-- [ ] Kaggle API configured, rules accepted
-- [ ] Data downloaded
-- [ ] Baseline pipeline reproduced (target: ~0.30+ MRR@25)
+- [x] Kaggle API configured, rules accepted
+- [x] Data downloaded (train: 2,539,608 spectra; test: 1,213 spectra / 400 molecules)
+- [x] Baseline pipeline reproduced — see `src/baseline.py`. Coarse sparse-cosine
+      pre-filter over a deduplicated library (~500k unique structure/adduct
+      spectra from `enveda-180`, `enveda-np-examples`, `gnps`, `riken`,
+      `pluskal_ms2`) + exact modified-cosine rescoring of the top candidates,
+      max-pooled across a molecule's spectra, deduplicated on the
+      tautomer-canonical InChIKey14 the competition actually scores against.
+      Full test set runs in ~1-2 minutes (well under the 9h Kaggle limit).
+      **Local validation MRR@25: 0.4454** (held out `enveda-np-examples`, the
+      library closest to the test distribution, as a pseudo-test set with
+      known ground truth — optimistic vs. the real hidden test set, since
+      these are common compounds that also appear elsewhere in training, but
+      confirms the pipeline mechanics are correct). First real submission
+      written to `submissions/baseline_v1.csv`, validated against
+      `sample_submission.csv`.
 - [ ] Formula prediction filter added
 - [ ] Domain-adapted spectral embeddings added
 - [ ] Class 2 retrieval/rerank pipeline
 - [ ] Class 3 de novo exploration
 - [ ] Final ensemble + validation
+
+## Design notes / known limitations
+
+- Library dedup keeps one representative spectrum per (structure, adduct) —
+  picking the one with the most peaks. Spectra at different collision
+  energies for the same compound are not merged; that's a plausible Phase 2
+  improvement (more fragment coverage per candidate).
+- The frequency-based fallback (`baseline._global_fallback_candidates`) only
+  fires when a spectrum gets zero similarity hits; `predict_test_set` prints
+  a warning with the count when it happens, worth checking each run.
+- `PEAK_TOP_K`, `BIN_WIDTH`, `COARSE_TOP_K`, `ANALOG`-related bonus constants
+  in `src/baseline.py` are initial guesses, not tuned — a natural next step
+  once a real local CV split (not just the np-examples holdout) is built.

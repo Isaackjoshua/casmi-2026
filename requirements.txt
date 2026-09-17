@@ -1,0 +1,9 @@
+kaggle
+pandas
+numpy
+pyarrow
+scikit-learn
+rdkit
+matchms
+tqdm
+pyteomics

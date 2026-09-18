@@ -69,10 +69,11 @@ def build_notebook() -> dict:
             "# CASMI 2026 Phase 3: propagation + learned fingerprint model\n\n"
             "Phase 2's analog propagation (0.19 public) fused with an MLP that predicts a "
             "molecule's 2048-bit Morgan fingerprint directly from its spectrum (trained on "
-            "the 2.5M labelled training spectra, split by structure). Both signals score "
-            "every COCONUT candidate in a ~1 mDa mass window; the model carries the cases "
-            "where no close library analog exists. See the project repo README for the "
-            "validation numbers behind this design."
+            "the 2.5M labelled training spectra, split by structure, then fine-tuned on the "
+            "timsTOF + natural-product libraries to target the real test set's instrument and "
+            "chemistry). Both signals score every COCONUT candidate in a ~1 mDa mass window; "
+            "the model carries the cases where no close library analog exists. See the project "
+            "repo README for the validation numbers behind this design."
         ),
         _code_cell(
             f'!pip install --no-index --find-links=/kaggle/input/datasets/{RDKIT_WHEEL_DATASET} rdkit -q\n'

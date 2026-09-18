@@ -192,10 +192,26 @@ casmi-2026/
       as a private Kaggle dataset (`isaackjoshua/casmi26-fp-model`).
 
       **Score trajectory: 0.063 → 0.075 → 0.138 → 0.194 → 0.193 → 0.214.**
-- [ ] Improve the fingerprint model: longer training with Tanimoto-based
-      checkpoint selection, an instrument-matched (timsTOF) held-out
-      validation set, domain-adaptation fine-tuning on enveda-180, and
-      re-tuning alpha against that validation.
+- [x] Fingerprint model improvement round 1 — see `scripts/eval_pipeline.py`
+      (dual validation: the massbank/mona hard set + a new 200-structure
+      enveda-180 timsTOF holdout from the model's own structure split).
+      The two sets disagree on which signal wins (propagation dominates
+      on held-out drug-like timsTOF structures, the model on natural
+      products); the real test's ordering matches the natural-product set,
+      so alpha stays 0.3. Tried: heavier regularization (a wash), timsTOF-
+      only fine-tuning (+11% timsTOF model-only, −3% natural products, and
+      it *lowered* val Tanimoto@0.5 — that threshold proxy is misleading
+      for a log-likelihood ranker), ensembles of similar models (no gain).
+      **Winner: fine-tune v1 on timsTOF + natural-product libraries
+      (`enveda-180`, `enveda-np-examples`, `gnps`, `riken`), 3 epochs at
+      lr 2e-4, best-Tanimoto checkpoint (`fp_model_ft2_tan.pt`)** — a
+      strict improvement over the deployed model on every metric:
+      hard α=0.3 0.4932→0.4998, timsTOF α=0.3 0.5661→0.5838, timsTOF
+      model-only 0.3966→0.4339. Uploaded as v2 of the model dataset;
+      kernel rebuilt, awaiting the daily submission quota reset.
+- [ ] Next structural step: a peak-level transformer (the host tutorial's
+      approach) to replace 0.2 Da binning — all MLP variants cluster in a
+      narrow band, suggesting the binned input is the ceiling.
 - [ ] Class 3 de novo exploration
 - [ ] Final ensemble + validation
 

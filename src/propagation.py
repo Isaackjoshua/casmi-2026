@@ -116,27 +116,25 @@ def load_candidate_pool(path: str) -> CandidatePool:
     return candidate_pool_from_df(pd.read_parquet(path))
 
 
-def propagate(
-    anchors: list[tuple[str, str, float]],
-    query_neutral_mass: float,
-    pool: CandidatePool,
-    mass_window_da: float = MASS_WINDOW_DA,
-    exponent: float = PROPAGATION_EXPONENT,
-    top_n: int = TOP_N_PER_SPECTRUM,
-) -> list[tuple[str, str, float]]:
-    """anchors: (inchikey14, smiles, spectral_similarity) tuples from
-    score_spectrum -- library spectra that scored well against the query.
-    Returns (inchikey14, smiles, propagated_score) for the best candidates
-    in the mass-windowed pool, best first.
+def mass_window(pool: CandidatePool, query_neutral_mass: float, mass_window_da: float) -> tuple[int, int]:
+    """[lo, hi) index range of pool candidates within +/- mass_window_da of
+    the query's neutral mass (pool.exact_mass is sorted ascending).
     """
-    if not anchors or query_neutral_mass is None:
-        return []
+    lo = int(np.searchsorted(pool.exact_mass, query_neutral_mass - mass_window_da, side="left"))
+    hi = int(np.searchsorted(pool.exact_mass, query_neutral_mass + mass_window_da, side="right"))
+    return lo, hi
 
-    lo = np.searchsorted(pool.exact_mass, query_neutral_mass - mass_window_da, side="left")
-    hi = np.searchsorted(pool.exact_mass, query_neutral_mass + mass_window_da, side="right")
-    if hi <= lo:
-        return []
 
+def propagation_scores(
+    anchors: list[tuple[str, str, float]],
+    lo: int,
+    hi: int,
+    pool: CandidatePool,
+    exponent: float = PROPAGATION_EXPONENT,
+) -> np.ndarray:
+    """Propagated score for every candidate in pool[lo:hi]:
+    max over anchors of sim(anchor)^exponent * Tanimoto(candidate, anchor).
+    """
     cand_words = pool.fp_words[lo:hi]  # (M, FP_WORDS)
     cand_pop = pool.popcount[lo:hi]  # (M,)
     best = np.zeros(hi - lo, dtype=np.float64)
@@ -154,9 +152,34 @@ def propagate(
 
         weighted = (sim**exponent) * tanimoto
         np.maximum(best, weighted, out=best)
+    return best
+
+
+def propagate(
+    anchors: list[tuple[str, str, float]],
+    query_neutral_mass: float,
+    pool: CandidatePool,
+    mass_window_da: float = MASS_WINDOW_DA,
+    exponent: float = PROPAGATION_EXPONENT,
+    top_n: int = TOP_N_PER_SPECTRUM,
+) -> list[tuple[str, str, float]]:
+    """anchors: (inchikey14, smiles, spectral_similarity) tuples from
+    score_spectrum -- library spectra that scored well against the query.
+    Returns (inchikey14, smiles, propagated_score) for the best candidates
+    in the mass-windowed pool, best first.
+    """
+    if not anchors or query_neutral_mass is None:
+        return []
+
+    lo, hi = mass_window(pool, query_neutral_mass, mass_window_da)
+    if hi <= lo:
+        return []
+
+    best = propagation_scores(anchors, lo, hi, pool, exponent)
 
     nonzero = np.nonzero(best)[0]
     if len(nonzero) == 0:
         return []
     order = nonzero[np.argsort(best[nonzero])[::-1]][:top_n]
     return [(pool.inchikey14[lo + i], pool.normalized_smiles[lo + i], float(best[i])) for i in order]
+

@@ -10,3 +10,5 @@ __pycache__/
 .venv/
 venv/
 kaggle.json
+kaggle_kernel_v3/
+kaggle_model_dataset/

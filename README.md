@@ -122,6 +122,21 @@ casmi-2026/
       local validation jump (0.0211 -> 0.1725, ~8x) but large and
       unambiguous either way — strong confirmation the tuned mass window
       and spectrum merging generalize to the real hidden test set.
+
+      **Kept sweeping past 0.3 Da — the window isn't an analog-hop
+      tolerance.** Candidates are always matched against the query's own
+      measured neutral mass, so tightening the window just means trusting
+      the instrument's mass accuracy more. Score kept improving
+      monotonically all the way to ~1 mDa (`MASS_WINDOW_DA=0.001`,
+      `PROPAGATION_EXPONENT=2.5`: **0.4392 MRR@25**), the real accuracy
+      floor — tighter than that and real measurement noise starts
+      excluding true answers. Added adaptive widening for spectra that
+      land with zero candidates at that width (retry at 10x wider, up to
+      a 1 Da cap, before the frequency fallback): cut zero-hit spectra
+      from 16/150 to 6/150 and pushed the validation score to **0.4586**
+      — within reach of the 0.4454 measured on the much easier "common
+      compounds" holdout from Phase 1, but on a validation set built
+      specifically to be hard.
 - [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
       above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration

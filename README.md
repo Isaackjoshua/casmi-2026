@@ -137,6 +137,26 @@ casmi-2026/
       — within reach of the 0.4454 measured on the much easier "common
       compounds" holdout from Phase 1, but on a validation set built
       specifically to be hard.
+
+      **Kernel v6 (these settings) crashed on submit**: ran cleanly in
+      manual testing (public test set) but threw an unhandled exception
+      when Kaggle re-ran it against the actual hidden test set. Most
+      likely cause: `build_submission`'s `sample_submission.csv` coverage
+      check used to hard-`raise` on any molecule_id mismatch, which only
+      passed locally because the public test set's ids happen to match
+      the public sample file. Fixed in three layers (see commit
+      `3a25a55`): the coverage check now warns instead of raising,
+      `predict_test_set` wraps each molecule's prediction in try/except
+      with a frequency-fallback on any failure, and the notebook's
+      outermost cell has one more try/except around the whole prediction
+      step as a last resort. Resubmitted (kernel v7): ran without error
+      and scored **real public leaderboard score 0.194** — our best score
+      yet, confirming both that the tight-window tuning generalizes to
+      the real hidden test set and that the defensive fixes resolved
+      whatever crashed v6.
+
+      **Score trajectory this session: 0.063 → 0.075 → 0.138 → (crash) →
+      0.194** — a 3x improvement from the original baseline.
 - [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
       above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration

@@ -96,17 +96,26 @@ casmi-2026/
         anchors that were chemically unrelated, Tanimoto ~0.1, because a
         single shared dominant fragment peak dominates raw cosine
         regardless of the rest of the spectrum): 0.0145 -> **0.0211**.
-      Runtime: ~7.5s/molecule locally, ~1.5h on Kaggle's slower instance for
-      the real test set — comfortably inside the 9h limit. Packaged as a
-      Kaggle kernel (`scripts/build_kaggle_kernel_v2.py`), submitted, and
-      **real public leaderboard score: 0.075** (up from 0.063) — a real,
-      positive move in the direction the local hard validation predicted,
-      though smaller in absolute terms (local: +0.0211, real: +0.012).
-      Encouraging as a sanity check on the validation methodology, but
-      still well under the ~0.52 research suggested is achievable on a
-      comparable setup — likely next levers: tuning the mass window /
-      propagation exponent, molecular formula filtering, and reconsidering
-      how spectra are aggregated before ranking.
+      First submission (window=150 Da, exponent=4, no spectrum merging):
+      real public leaderboard score **0.075** (up from Phase 1's 0.063) — a
+      real, positive move in the direction the local hard validation
+      predicted, though smaller in absolute terms (local: +0.0211,
+      real: +0.012). Encouraging as a sanity check on the validation
+      methodology, but still well under research-suggested ceilings.
+
+      **Follow-up tuning found the mass window was badly miscalibrated.**
+      A local parameter sweep on the same hard-validation set found scores
+      *monotonically improving* as the window shrank — the "generous
+      analog window" was diluting every ranking with tens of thousands of
+      same-mass-region-but-chemically-irrelevant candidates. Combined with
+      merging a molecule's multi-collision-energy spectra into one
+      consensus spectrum before anchor search (`pipeline_v2.merge_spectra`,
+      grouped by adduct), the tuned defaults
+      (`MASS_WINDOW_DA=0.3`, `PROPAGATION_EXPONENT=3.0`, both in
+      `src/propagation.py`) score **0.1725 MRR@25** on the full 150-molecule
+      hard validation set — up from 0.0211, an 8x improvement — and run in
+      56s instead of 1120s (20x faster, since far fewer candidates get
+      scored per query). Not yet resubmitted to Kaggle at time of writing.
 - [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
       above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration

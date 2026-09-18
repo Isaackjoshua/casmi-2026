@@ -29,13 +29,23 @@ import numpy as np
 import pandas as pd
 
 FP_WORDS = 32  # 2048 bits / 64 bits per word
-PROPAGATION_EXPONENT = 4.0  # from public-notebook ablation: sim(analog)^4 * Tanimoto(candidate, analog)
-MASS_WINDOW_DA = 150.0  # generous analog window; a tight window defeats the purpose of propagation
+# Tuned by local sweep on the structure-absent-from-library hard validation
+# set (see README): a wide "generous analog window" (originally 150 Da,
+# following the public-notebook ablation's own description) turned out to
+# be actively harmful -- it dilutes the ranking with tens of thousands of
+# same-mass-region-but-irrelevant candidates. A near-isomeric window (mass
+# nearly unchanged) plus a mild similarity exponent scored 0.1725 MRR@25
+# on the same 150-molecule validation set that scored 0.0211 at the
+# original (150 Da, exponent 4) setting -- an 8x improvement, and ~20x
+# faster since far fewer candidates get scored per query.
+PROPAGATION_EXPONENT = 3.0
+MASS_WINDOW_DA = 0.3
 TOP_N_PER_SPECTRUM = 50
 
 # Monoisotopic masses for the ten adducts the test set uses (see the
-# competition's Data Landscape notes); approximate to a few mDa, which is
-# irrelevant here since MASS_WINDOW_DA is two orders of magnitude coarser.
+# competition's Data Landscape notes). Precise to ~1 mDa; any residual
+# instrument calibration error (e.g. the +1.55 ppm timsTOF bias a data-audit
+# notebook found) is well inside MASS_WINDOW_DA's margin.
 _PROTON = 1.007276
 _ELECTRON = 0.000549
 _H2O = 18.010565

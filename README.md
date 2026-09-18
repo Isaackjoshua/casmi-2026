@@ -96,12 +96,17 @@ casmi-2026/
         anchors that were chemically unrelated, Tanimoto ~0.1, because a
         single shared dominant fragment peak dominates raw cosine
         regardless of the rest of the spectrum): 0.0145 -> **0.0211**.
-      Runtime: ~7.5s/molecule, ~50 min projected for the real test set —
-      comfortably inside the 9h Kaggle limit. Still well under the ~0.52
-      research suggested is achievable on a comparable setup — likely next
-      levers: tuning the mass window / propagation exponent, molecular
-      formula filtering, and reconsidering how spectra are aggregated
-      before ranking. Not yet packaged into a Kaggle kernel or submitted.
+      Runtime: ~7.5s/molecule locally, ~1.5h on Kaggle's slower instance for
+      the real test set — comfortably inside the 9h limit. Packaged as a
+      Kaggle kernel (`scripts/build_kaggle_kernel_v2.py`), submitted, and
+      **real public leaderboard score: 0.075** (up from 0.063) — a real,
+      positive move in the direction the local hard validation predicted,
+      though smaller in absolute terms (local: +0.0211, real: +0.012).
+      Encouraging as a sanity check on the validation methodology, but
+      still well under the ~0.52 research suggested is achievable on a
+      comparable setup — likely next levers: tuning the mass window /
+      propagation exponent, molecular formula filtering, and reconsidering
+      how spectra are aggregated before ranking.
 - [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
       above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration

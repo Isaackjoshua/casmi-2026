@@ -157,6 +157,24 @@ casmi-2026/
 
       **Score trajectory this session: 0.063 → 0.075 → 0.138 → (crash) →
       0.194** — a 3x improvement from the original baseline.
+
+      **Kernel v8 (all 11 training libraries as anchors): 0.193 — flat.**
+      Expanding the anchor library from 5 to all 11 sources lifted the
+      local hard validation from 0.4586 to 0.4878–0.4914 (validated with
+      two independent held-out pairs), but that did *not* transfer to the
+      real hidden test set (0.194 → 0.193, noise). Instructive: the local
+      validation tracked the big structural changes well (mass-window
+      tuning: huge local gain → big real gain) but not this subtler one.
+      Likely reason: the held-out compounds come from *other public
+      libraries*, so adding more public libraries naturally helps find
+      their analogs — but the real test set is Enveda's own timsTOF
+      measurements of specific natural products, where extra public-
+      library coverage adds little. This is the instrument/chemistry
+      domain shift flagged in the original roadmap, showing up as a
+      local-vs-real gap (~0.49 local vs ~0.19 real) that library-count
+      tuning can't close. Two real submissions now plateaued at ~0.19,
+      suggesting this is near the ceiling of the pure
+      "propagate-from-spectral-analogs" approach.
 - [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
       above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration

@@ -30,16 +30,21 @@ import pandas as pd
 
 FP_WORDS = 32  # 2048 bits / 64 bits per word
 # Tuned by local sweep on the structure-absent-from-library hard validation
-# set (see README): a wide "generous analog window" (originally 150 Da,
-# following the public-notebook ablation's own description) turned out to
-# be actively harmful -- it dilutes the ranking with tens of thousands of
-# same-mass-region-but-irrelevant candidates. A near-isomeric window (mass
-# nearly unchanged) plus a mild similarity exponent scored 0.1725 MRR@25
-# on the same 150-molecule validation set that scored 0.0211 at the
-# original (150 Da, exponent 4) setting -- an 8x improvement, and ~20x
-# faster since far fewer candidates get scored per query.
-PROPAGATION_EXPONENT = 3.0
-MASS_WINDOW_DA = 0.3
+# set (see README). Counterintuitively, this window isn't an "analog hop"
+# tolerance at all: candidates are always matched against the QUERY's own
+# measured neutral mass, so it's really just accounting for instrument
+# mass-measurement error. The original 150 Da ("generous analog window",
+# following the public-notebook ablation's own description) diluted every
+# ranking with tens of thousands of same-mass-region-but-chemically-
+# irrelevant candidates. Score improved *monotonically* as the window
+# shrank, bottoming out around 1 mDa -- roughly the real accuracy limit of
+# the instrument, since going tighter starts excluding true answers to
+# real measurement noise (see pipeline_v2's adaptive widening for spectra
+# that come up empty at this width). 0.001 Da / exponent 2.5 scored 0.4392
+# MRR@25 on the 150-molecule hard validation set, vs. 0.0211 at the
+# original (150 Da, exponent 4) setting -- a >20x improvement.
+PROPAGATION_EXPONENT = 2.5
+MASS_WINDOW_DA = 0.001
 TOP_N_PER_SPECTRUM = 50
 
 # Monoisotopic masses for the ten adducts the test set uses (see the

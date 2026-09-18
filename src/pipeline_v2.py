@@ -17,6 +17,8 @@ from .metric import to_inchikey14
 from .propagation import MASS_WINDOW_DA, PROPAGATION_EXPONENT, CandidatePool, neutral_mass, propagate
 
 MERGE_TOL_DA = 0.02
+MASS_WINDOW_WIDEN_FACTOR = 10.0  # retry factor when a tight window yields zero candidates
+MASS_WINDOW_WIDEN_CAP = 1.0  # stop widening past this (Da); fall through to the frequency fallback instead
 
 
 def merge_spectra(rows: list[dict], tol_da: float = MERGE_TOL_DA) -> dict:
@@ -93,7 +95,18 @@ def predict_molecule(
         if qmass is None:
             continue
 
-        for key, smiles, score in propagate(anchors, qmass, pool, mass_window_da, exponent):
+        # A tight window is what makes propagation precise (see
+        # src/propagation.py's tuning notes), but it can leave a spectrum
+        # with zero candidates if the true structure's neighbors happen to
+        # sit just outside it. Widen progressively rather than falling
+        # straight through to the (much cruder) global frequency fallback.
+        hits = propagate(anchors, qmass, pool, mass_window_da, exponent)
+        widen = mass_window_da
+        while not hits and widen < MASS_WINDOW_WIDEN_CAP:
+            widen *= MASS_WINDOW_WIDEN_FACTOR
+            hits = propagate(anchors, qmass, pool, widen, exponent)
+
+        for key, smiles, score in hits:
             if score > best_score.get(key, 0.0):
                 best_score[key] = score
                 best_smiles[key] = smiles

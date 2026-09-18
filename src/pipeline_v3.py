@@ -17,7 +17,7 @@ import torch
 
 from .baseline import FINE_TOP_N, N_GUESSES, Library, _global_fallback_candidates, score_spectrum
 from .candidates import FP_BITS
-from .fingerprint_model import FingerprintMLP, build_feature_matrix, fingerprint_loglik_scores, predict_probs
+from .fingerprint_model import FingerprintEnsemble, FingerprintMLP, build_feature_matrix, fingerprint_loglik_scores, predict_probs
 from .metric import to_inchikey14
 from .pipeline_v2 import MASS_WINDOW_WIDEN_CAP, MASS_WINDOW_WIDEN_FACTOR, merge_spectra
 from .propagation import MASS_WINDOW_DA, PROPAGATION_EXPONENT, CandidatePool, mass_window, neutral_mass, propagation_scores
@@ -29,11 +29,20 @@ ALPHA = 0.3
 MODEL_FLOOR = 0.05  # every mass-consistent candidate keeps some model credit, so none is dropped as "no evidence"
 
 
-def load_fingerprint_model(path: str, device) -> FingerprintMLP:
+def _load_one(path: str, device) -> FingerprintMLP:
     ckpt = torch.load(path, map_location=device, weights_only=False)
     model = FingerprintMLP(n_features=ckpt["n_features"], hidden=ckpt["hidden"], dropout=ckpt["dropout"])
     model.load_state_dict(ckpt["state_dict"])
     return model.to(device).eval()
+
+
+def load_fingerprint_model(path, device):
+    """One checkpoint path -> that model; a list of paths -> an ensemble
+    averaging their logits.
+    """
+    if isinstance(path, (list, tuple)):
+        return FingerprintEnsemble([_load_one(p, device) for p in path]).to(device).eval()
+    return _load_one(path, device)
 
 
 def candidate_bits(pool: CandidatePool, lo: int, hi: int) -> np.ndarray:

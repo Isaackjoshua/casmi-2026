@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def load_data(path: Path):
     z = np.load(path, allow_pickle=True)
     X = sp.csr_matrix((z["X_data"], z["X_indices"], z["X_indptr"]), shape=tuple(z["X_shape"]))
-    return X, z["target_idx"], z["fp_table"], z["is_val"]
+    return X, z["target_idx"], z["fp_table"], z["is_val"], z["ingest_lib"]
 
 
 def dense_batch(X: sp.csr_matrix, idx: np.ndarray) -> np.ndarray:
@@ -67,28 +67,46 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--hidden", type=int, default=4096)
     ap.add_argument("--dropout", type=float, default=0.3)
-    ap.add_argument("--out", default=str(ROOT / "data/processed/fp_model.pt"))
+    ap.add_argument("--weight-decay", type=float, default=1e-5)
+    ap.add_argument("--out", default=str(ROOT / "data/processed/fp_model.pt"),
+                    help="best-val-loss checkpoint; best-val-Tanimoto goes to <out minus .pt>_tan.pt")
+    ap.add_argument("--finetune-from", default=None, help="start from this checkpoint instead of scratch")
+    ap.add_argument("--sources", nargs="+", default=None,
+                    help="restrict training spectra to these ingest_lib values (e.g. timsTOF-only fine-tuning)")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
 
-    X, target_idx, fp_table, is_val = load_data(ROOT / "data/processed/fp_train_data.npz")
-    train_idx = np.nonzero(~is_val)[0]
+    X, target_idx, fp_table, is_val, ingest_lib = load_data(ROOT / "data/processed/fp_train_data.npz")
+    train_mask = ~is_val
+    if args.sources:
+        train_mask &= np.isin(ingest_lib, args.sources)
+        print(f"restricting training to sources {args.sources}")
+    train_idx = np.nonzero(train_mask)[0]
     val_idx = np.nonzero(is_val)[0]
     print(f"train spectra: {len(train_idx)}, val spectra: {len(val_idx)}, features: {X.shape[1]}")
 
-    model = FingerprintMLP(n_features=N_FEATURES, hidden=args.hidden, dropout=args.dropout).to(device)
+    if args.finetune_from:
+        ckpt = torch.load(args.finetune_from, map_location=device, weights_only=False)
+        model = FingerprintMLP(n_features=ckpt["n_features"], hidden=ckpt["hidden"], dropout=args.dropout).to(device)
+        model.load_state_dict(ckpt["state_dict"])
+        print(f"fine-tuning from {args.finetune_from} (epoch {ckpt.get('epoch')}, val_tanimoto {ckpt.get('val_tanimoto'):.4f})")
+    else:
+        model = FingerprintMLP(n_features=N_FEATURES, hidden=args.hidden, dropout=args.dropout).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params/1e6:.1f}M")
 
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     steps_per_epoch = (len(train_idx) + args.batch - 1) // args.batch
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=args.epochs * steps_per_epoch, pct_start=0.1)
     loss_fn = nn.BCEWithLogitsLoss()
     rng = np.random.default_rng(0)
 
     best_val = float("inf")
+    best_tan = -1.0
+    out_tan = args.out[:-3] + "_tan.pt" if args.out.endswith(".pt") else args.out + "_tan.pt"
+    hidden = model.net[0].out_features
     for epoch in range(args.epochs):
         model.train()
         perm = rng.permutation(train_idx)
@@ -110,14 +128,16 @@ def main() -> None:
 
         val_loss, val_tanimoto = evaluate(model, X, target_idx, fp_table, val_idx, device)
         print(f"epoch {epoch+1}: val_loss={val_loss:.4f} val_tanimoto@0.5={val_tanimoto:.4f} ({time.time()-t0:.0f}s)", flush=True)
+        ckpt = {"state_dict": model.state_dict(), "n_features": N_FEATURES, "hidden": hidden,
+                "dropout": args.dropout, "val_loss": val_loss, "val_tanimoto": val_tanimoto, "epoch": epoch + 1}
         if val_loss < best_val:
             best_val = val_loss
-            torch.save(
-                {"state_dict": model.state_dict(), "n_features": N_FEATURES, "hidden": args.hidden,
-                 "dropout": args.dropout, "val_loss": val_loss, "val_tanimoto": val_tanimoto, "epoch": epoch + 1},
-                args.out,
-            )
-            print(f"  saved {args.out}", flush=True)
+            torch.save(ckpt, args.out)
+            print(f"  saved {args.out} (best val loss)", flush=True)
+        if val_tanimoto > best_tan:
+            best_tan = val_tanimoto
+            torch.save(ckpt, out_tan)
+            print(f"  saved {out_tan} (best val Tanimoto)", flush=True)
 
 
 if __name__ == "__main__":

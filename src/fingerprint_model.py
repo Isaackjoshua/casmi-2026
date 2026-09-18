@@ -114,6 +114,20 @@ class FingerprintMLP(nn.Module):
         return self.net(x)
 
 
+class FingerprintEnsemble(nn.Module):
+    """Averages the logits of several FingerprintMLPs (e.g. differently
+    regularized or domain-fine-tuned checkpoints). Drop-in for a single
+    model everywhere predict_probs is used.
+    """
+
+    def __init__(self, models: list[nn.Module]):
+        super().__init__()
+        self.models = nn.ModuleList(models)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.stack([m(x) for m in self.models]).mean(0)
+
+
 def sparse_batch_to_tensor(mat: sp.csr_matrix, idx: np.ndarray, device) -> torch.Tensor:
     sub = mat[idx].tocoo()
     t = torch.sparse_coo_tensor(

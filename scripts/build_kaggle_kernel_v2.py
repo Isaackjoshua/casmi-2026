@@ -115,7 +115,19 @@ def build_notebook() -> dict:
             'candidate_df = candidate_df.dropna(subset=["fingerprint", "exact_mass"]).reset_index(drop=True)\n'
             'print(f"candidate pool (fingerprinted): {len(candidate_df)} structures")\n\n'
             "pool = candidate_pool_from_df(candidate_df)\n\n"
-            "predictions = predict_test_set(test, library, pool)\n\n"
+            "# predict_test_set already guards each molecule individually (see\n"
+            "# pipeline_v2.py), but this outer guard is the last resort: the hidden\n"
+            "# test set can differ from the public one in ways nothing here was\n"
+            "# tested against, and a hard crash forfeits the whole submission --\n"
+            "# better to hand back frequency-based guesses for every molecule than\n"
+            "# nothing at all.\n"
+            "try:\n"
+            "    predictions = predict_test_set(test, library, pool)\n"
+            "except Exception as e:\n"
+            "    print(f'ERROR: predict_test_set failed entirely ({type(e).__name__}: {e}); '\n"
+            "          f'falling back to library-frequency guesses for every molecule')\n"
+            "    predictions = {mid: _global_fallback_candidates(library, None, N_GUESSES) "
+            "for mid in test['molecule_id'].unique()}\n\n"
             'write_submission(predictions, "submission.csv", '
             f'sample_submission_path=f"{{DATA_DIR}}/sample_submission.csv")\n'
         )

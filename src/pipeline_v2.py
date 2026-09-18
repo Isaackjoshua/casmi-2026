@@ -134,15 +134,32 @@ def predict_test_set(
 ) -> dict[str, list[str]]:
     predictions = {}
     n_fallback = 0
+    n_error = 0
     for mid, group in test_df.groupby("molecule_id"):
-        guesses = predict_molecule(group.to_dict("records"), lib, pool, mass_window_da, exponent)
+        # A hidden test set can differ from the public one in ways not
+        # exercised locally (different adducts, malformed rows, unusual
+        # peak arrays -- Kaggle's own submission page warns the hidden set
+        # "can be larger/smaller/different"). One molecule's edge case
+        # must not crash the entire run and forfeit every other
+        # prediction, so failures fall back to the frequency guess instead
+        # of propagating.
+        try:
+            guesses = predict_molecule(group.to_dict("records"), lib, pool, mass_window_da, exponent)
+        except Exception as e:
+            n_error += 1
+            print(f"WARNING: prediction failed for {mid} ({type(e).__name__}: {e}); using frequency fallback")
+            guesses = []
+
         if not guesses:
             n_fallback += 1
-            mode = str(group.iloc[0]["ionization_mode"]).strip().lower()
-            guesses = _global_fallback_candidates(lib, mode, N_GUESSES)
+            try:
+                mode = str(group.iloc[0]["ionization_mode"]).strip().lower()
+                guesses = _global_fallback_candidates(lib, mode, N_GUESSES)
+            except Exception:
+                guesses = _global_fallback_candidates(lib, None, N_GUESSES)
         predictions[mid] = guesses
 
     if n_fallback:
         print(f"WARNING: {n_fallback}/{len(predictions)} molecules had zero propagated hits "
-              f"and used the frequency fallback -- inspect these before trusting the score.")
+              f"and used the frequency fallback ({n_error} from errors) -- inspect these before trusting the score.")
     return predictions

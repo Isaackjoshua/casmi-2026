@@ -115,7 +115,13 @@ casmi-2026/
       `src/propagation.py`) score **0.1725 MRR@25** on the full 150-molecule
       hard validation set — up from 0.0211, an 8x improvement — and run in
       56s instead of 1120s (20x faster, since far fewer candidates get
-      scored per query). Not yet resubmitted to Kaggle at time of writing.
+      scored per query). Resubmitted (kernel v5) 2026-09-18: **real public
+      leaderboard score 0.138** — more than double the original 0.063
+      baseline, and ~1.8x the previous Phase 2 submission (0.075). Real-world
+      gain (0.075 -> 0.138, +0.063) is smaller in relative terms than the
+      local validation jump (0.0211 -> 0.1725, ~8x) but large and
+      unambiguous either way — strong confirmation the tuned mass window
+      and spectrum merging generalize to the real hidden test set.
 - [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
       above is a first working version, not the ceiling)
 - [ ] Class 3 de novo exploration
@@ -124,9 +130,9 @@ casmi-2026/
 ## Design notes / known limitations
 
 - Library dedup keeps one representative spectrum per (structure, adduct) —
-  picking the one with the most peaks. Spectra at different collision
-  energies for the same compound are not merged; that's a plausible Phase 2
-  improvement (more fragment coverage per candidate).
+  picking the one with the most peaks. (Phase 2's `pipeline_v2.merge_spectra`
+  does merge a *query* molecule's multiple collision-energy spectra before
+  anchor search; the *library* side is still one spectrum per structure/adduct.)
 - The frequency-based fallback (`baseline._global_fallback_candidates`) only
   fires when a spectrum gets zero similarity hits; `predict_test_set` prints
   a warning with the count when it happens, worth checking each run.

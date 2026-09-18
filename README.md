@@ -175,8 +175,27 @@ casmi-2026/
       tuning can't close. Two real submissions now plateaued at ~0.19,
       suggesting this is near the ceiling of the pure
       "propagate-from-spectral-analogs" approach.
-- [ ] Class 2 retrieval/rerank refinement (this *is* Phase 2's target; the
-      above is a first working version, not the ceiling)
+- [x] Learned spectrum -> fingerprint model (Phase 3) — see
+      `src/fingerprint_model.py`, `src/pipeline_v3.py`,
+      `scripts/build_fp_training_data.py`, `scripts/train_fingerprint_model.py`.
+      An MLP (61.8M params) over 0.2 Da fragment bins + neutral-loss bins +
+      precursor/ion-mode features, predicting the 2048-bit Morgan fingerprint
+      with BCE; trained on 2.49M spectra split by structure (hard-validation
+      structures excluded), 11 min on an RTX A4000, held-out Tanimoto@0.5
+      ~0.31. Candidates ranked by fingerprint log-likelihood under the
+      predicted bit probabilities (one matrix multiply), fused with
+      propagation at alpha=0.3. Hard validation: propagation-only 0.4456,
+      model-only 0.4836, fused **0.4932**. **Real public leaderboard score:
+      0.214** (up from 0.194) — broke the ~0.19 plateau two Phase 2
+      configurations hit, confirming the model transfers to the timsTOF
+      test data where analog propagation stalled. Model checkpoint shipped
+      as a private Kaggle dataset (`isaackjoshua/casmi26-fp-model`).
+
+      **Score trajectory: 0.063 → 0.075 → 0.138 → 0.194 → 0.193 → 0.214.**
+- [ ] Improve the fingerprint model: longer training with Tanimoto-based
+      checkpoint selection, an instrument-matched (timsTOF) held-out
+      validation set, domain-adaptation fine-tuning on enveda-180, and
+      re-tuning alpha against that validation.
 - [ ] Class 3 de novo exploration
 - [ ] Final ensemble + validation
 

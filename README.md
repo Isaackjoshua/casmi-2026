@@ -209,9 +209,26 @@ casmi-2026/
       hard α=0.3 0.4932→0.4998, timsTOF α=0.3 0.5661→0.5838, timsTOF
       model-only 0.3966→0.4339. Uploaded as v2 of the model dataset;
       kernel rebuilt, awaiting the daily submission quota reset.
-- [ ] Next structural step: a peak-level transformer (the host tutorial's
-      approach) to replace 0.2 Da binning — all MLP variants cluster in a
-      narrow band, suggesting the binned input is the ceiling.
+- [x] Peak-level transformer (`src/peak_transformer.py`) — 4.6M params
+      (13x smaller than the MLP), spectra as sets of up to 64 peaks with
+      sinusoidal embeddings of exact m/z and neutral loss, so mass defect
+      and fragment-pair structure are available to self-attention.
+      6 epochs, ~6 min each. Best val Tanimoto@0.5 0.3304 vs the MLP's
+      0.31 — but end-to-end it *splits*: better on the instrument-matched
+      timsTOF set (0.5851/0.4466 vs 0.5838/0.4339 at α=0.3/0.0), worse on
+      natural products (0.4797/0.4566 vs 0.4998/0.4905). Second time the
+      Tanimoto@0.5 proxy has pointed the wrong way for a log-likelihood
+      ranker. Ensembling the two (probability-level average, via
+      `pipeline_v3.predict_bit_probs` dispatch) is a wash on the hard set
+      (0.4959) and clearly better on timsTOF (0.5923/0.4650).
+- [ ] Two candidates staged, both awaiting submission: the ft2_tan MLP
+      alone (kernel `casmi26-phase-3-fingerprint-model` v2) and the
+      MLP+transformer ensemble (kernel `casmi26-phase-3-ensemble`). The
+      real test is both natural-product chemistry *and* timsTOF, so it
+      sits between the two validation proxies — the leaderboard is the
+      tiebreaker.
+- [ ] Not yet retried after the session that launched it was killed: a
+      larger transformer (d=384, 6 layers, 8 epochs, ~50 min).
 - [ ] Class 3 de novo exploration
 - [ ] Final ensemble + validation
 

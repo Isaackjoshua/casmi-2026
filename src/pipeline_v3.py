@@ -19,6 +19,7 @@ from .baseline import FINE_TOP_N, N_GUESSES, Library, _global_fallback_candidate
 from .candidates import FP_BITS
 from .fingerprint_model import FingerprintEnsemble, FingerprintMLP, build_feature_matrix, fingerprint_loglik_scores, predict_probs
 from .metric import to_inchikey14
+from .peak_transformer import PeakTransformer, predict_probs_peaks
 from .pipeline_v2 import MASS_WINDOW_WIDEN_CAP, MASS_WINDOW_WIDEN_FACTOR, merge_spectra
 from .propagation import MASS_WINDOW_DA, PROPAGATION_EXPONENT, CandidatePool, mass_window, neutral_mass, propagation_scores
 
@@ -29,20 +30,39 @@ ALPHA = 0.3
 MODEL_FLOOR = 0.05  # every mass-consistent candidate keeps some model credit, so none is dropped as "no evidence"
 
 
-def _load_one(path: str, device) -> FingerprintMLP:
+def _load_one(path: str, device):
+    """Dispatch on checkpoint contents: the peak transformer saves its
+    constructor config under "config", the binned MLP saves n_features/hidden.
+    """
     ckpt = torch.load(path, map_location=device, weights_only=False)
-    model = FingerprintMLP(n_features=ckpt["n_features"], hidden=ckpt["hidden"], dropout=ckpt["dropout"])
+    if "config" in ckpt:
+        model = PeakTransformer(**ckpt["config"])
+    else:
+        model = FingerprintMLP(n_features=ckpt["n_features"], hidden=ckpt["hidden"], dropout=ckpt["dropout"])
     model.load_state_dict(ckpt["state_dict"])
     return model.to(device).eval()
 
 
 def load_fingerprint_model(path, device):
     """One checkpoint path -> that model; a list of paths -> an ensemble
-    averaging their logits.
+    (models of either type may be mixed; predict_bit_probs averages their
+    bit probabilities).
     """
     if isinstance(path, (list, tuple)):
         return FingerprintEnsemble([_load_one(p, device) for p in path]).to(device).eval()
     return _load_one(path, device)
+
+
+def predict_bit_probs(model, rows: list[dict], device) -> np.ndarray:
+    """(n_rows, FP_BITS) bit probabilities from any supported model: the
+    binned MLP (sparse feature matrix), the peak transformer (raw peaks),
+    or an ensemble of either, averaged at the probability level.
+    """
+    if isinstance(model, FingerprintEnsemble):
+        return np.mean([predict_bit_probs(m, rows, device) for m in model.models], axis=0)
+    if isinstance(model, PeakTransformer):
+        return predict_probs_peaks(model, rows, device)
+    return predict_probs(model, build_feature_matrix(rows), device)
 
 
 def candidate_bits(pool: CandidatePool, lo: int, hi: int) -> np.ndarray:
@@ -112,10 +132,9 @@ def predict_molecule(
                 fused += alpha * _normalize(prop, 1.0 if prop.max() > 0 else 0.0)
 
         if alpha < 1:
-            # Predict per raw spectrum (the model trained on single spectra,
+            # Predict per raw spectrum (the models trained on single spectra,
             # not merged ones) and average the bit probabilities.
-            feats = build_feature_matrix(group)
-            probs = predict_probs(model, feats, device).mean(axis=0)
+            probs = predict_bit_probs(model, group, device).mean(axis=0)
             loglik = fingerprint_loglik_scores(probs, candidate_bits(pool, lo, hi))
             # Every candidate in the window is mass-consistent, so each has
             # real (if weak) evidence -- keep them all above zero.

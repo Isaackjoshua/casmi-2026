@@ -77,7 +77,7 @@ class PeakTransformer(nn.Module):
         self.mode_embed = nn.Embedding(3, d_model)  # 0 unknown, 1 positive, 2 negative
         self.cls = nn.Parameter(torch.zeros(1, 1, d_model))
         layer = nn.TransformerEncoderLayer(d_model, n_heads, dim_feedforward=4 * d_model, dropout=dropout, batch_first=True, norm_first=True)
-        self.encoder = nn.TransformerEncoder(layer, n_layers)
+        self.encoder = nn.TransformerEncoder(layer, n_layers, enable_nested_tensor=False)
         self.norm = nn.LayerNorm(d_model)
         self.head = nn.Sequential(nn.Linear(d_model, 2 * d_model), nn.GELU(), nn.Dropout(dropout), nn.Linear(2 * d_model, n_bits))
         nn.init.normal_(self.cls, std=0.02)

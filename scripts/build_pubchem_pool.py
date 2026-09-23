@@ -9,32 +9,46 @@ natural products, natural product analogs, and synthetic molecules that
 might plausibly occur in nature", the analogs and synthetics live in
 PubChem, not COCONUT. Coverage, not ranking, is what caps the score.
 
-Filters applied (a mass spectrometry candidate must at minimum be a
-plausible small organic molecule in the test's mass range):
-  - exact mass within [MIN_MASS, MAX_MASS]
+Filters (a candidate must at least be a plausible small organic molecule
+in the test's mass range):
+  - largest fragment only (PubChem mixtures are mostly salts)
   - elements restricted to ELEMENTS (CHNOPS + halogens)
-  - single fragment (no salts/mixtures -- the largest component is what a
-    spectrum would represent, and PubChem's mixtures are mostly salts)
+  - exact mass within [MIN_MASS, MAX_MASS]
+  - deduplicated on InChIKey14, which is what the competition scores on --
+    this collapses PubChem's many stereoisomers and salt forms of the same
+    skeleton, and is a large fraction of the 124M input
+
+Two passes, because 124M rows will not fit in memory (an earlier
+single-pass version reached 2.7 GB RSS at 4M rows, heading for ~84 GB):
+  1. stream the dump, and flush each SHARD_ROWS-row batch to its own
+     mass-sorted shard on disk
+  2. k-way merge the shards by mass, deduplicating on the way (identical
+     InChIKey14 implies identical mass, so duplicates arrive adjacent),
+     writing the final arrays sequentially
 
 Output (data/pubchem/pubchem_pool/):
-  masses.npy     float64 (n,)   exact masses, ascending -- the sort order
-  fps.npy        uint64  (n,32) Morgan fingerprints, same order
-  meta.parquet                  inchikey14 + normalized_smiles, same order
-Written in mass order so a query's mass window is a contiguous slice, and
-split across .npy files so the kernel can memory-map rather than load
-~20 GB into RAM.
+  masses.npy     float64 (n,)    exact masses, ascending -- the sort order
+  fps.npy        uint64  (n,32)  Morgan fingerprints, same order
+  meta.parquet                   inchikey14 + normalized_smiles, same order
+Mass order means a query's mass window is a contiguous slice, and keeping
+fingerprints in their own .npy lets the Kaggle kernel memory-map them
+rather than loading tens of GB into RAM.
 
 Run: PYTHONPATH=. python3 scripts/build_pubchem_pool.py
 """
 
 import argparse
 import gzip
+import heapq
+import shutil
 import time
 from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors, rdFingerprintGenerator
 
@@ -47,6 +61,7 @@ MIN_MASS = 120.0  # test monoisotopic masses run 157-1159; pad for adduct/loss s
 MAX_MASS = 1300.0
 ELEMENTS = {"C", "H", "N", "O", "P", "S", "F", "Cl", "Br", "I", "Se", "B", "Si"}
 CHUNK = 200_000
+SHARD_ROWS = 4_000_000
 
 _GEN = None
 
@@ -60,7 +75,7 @@ def _gen():
 
 def _process(smiles: str):
     """SMILES -> (inchikey14, canonical smiles, exact mass, packed fp) or None."""
-    if "." in smiles:  # mixture/salt: keep the largest fragment only
+    if "." in smiles:
         smiles = max(smiles.split("."), key=len)
     mol = Chem.MolFromSmiles(smiles)
     if mol is None or mol.GetNumAtoms() == 0:
@@ -82,6 +97,82 @@ def _process(smiles: str):
     return key.split("-")[0], Chem.MolToSmiles(mol), mass, packed
 
 
+def _flush_shard(rows: list, shard_dir: Path, idx: int) -> Path:
+    """Write one mass-sorted shard. rows: list of (key, smiles, mass, fp)."""
+    rows.sort(key=lambda r: r[2])
+    path = shard_dir / f"shard_{idx:04d}.npz"
+    np.savez(
+        path,
+        masses=np.array([r[2] for r in rows], dtype=np.float64),
+        fps=np.stack([np.frombuffer(r[3], dtype=np.uint64) for r in rows]),
+        keys=np.array([r[0] for r in rows], dtype=object),
+        smiles=np.array([r[1] for r in rows], dtype=object),
+    )
+    return path
+
+
+def _merge_shards(shard_paths: list, out: Path) -> int:
+    """K-way merge by mass, dropping duplicate InChIKey14, writing the
+    final arrays sequentially so peak memory stays at one shard.
+    """
+    shards = [np.load(p, allow_pickle=True) for p in shard_paths]
+    streams = []
+    for si, z in enumerate(shards):
+        m, f, k, s = z["masses"], z["fps"], z["keys"], z["smiles"]
+        streams.append((m, f, k, s))
+
+    total = sum(len(st[0]) for st in streams)
+    masses_out = np.lib.format.open_memmap(out / "masses.npy", mode="w+", dtype=np.float64, shape=(total,))
+    fps_out = np.lib.format.open_memmap(out / "fps.npy", mode="w+", dtype=np.uint64, shape=(total, 32))
+
+    writer = None
+    buf_keys, buf_smiles = [], []
+    seen = set()
+    n = 0
+
+    heap = [(streams[i][0][0], i, 0) for i in range(len(streams)) if len(streams[i][0])]
+    heapq.heapify(heap)
+    while heap:
+        mass, si, pos = heapq.heappop(heap)
+        m, f, k, s = streams[si]
+        key = k[pos]
+        if key not in seen:
+            seen.add(key)
+            masses_out[n] = mass
+            fps_out[n] = f[pos]
+            buf_keys.append(key)
+            buf_smiles.append(s[pos])
+            n += 1
+            if len(buf_keys) >= 1_000_000:
+                tbl = pa.table({"inchikey14": buf_keys, "normalized_smiles": buf_smiles})
+                writer = writer or pq.ParquetWriter(out / "meta.parquet", tbl.schema)
+                writer.write_table(tbl)
+                buf_keys, buf_smiles = [], []
+        if pos + 1 < len(m):
+            heapq.heappush(heap, (m[pos + 1], si, pos + 1))
+
+    if buf_keys:
+        tbl = pa.table({"inchikey14": buf_keys, "normalized_smiles": buf_smiles})
+        writer = writer or pq.ParquetWriter(out / "meta.parquet", tbl.schema)
+        writer.write_table(tbl)
+    if writer:
+        writer.close()
+
+    # trim the memmaps to the deduplicated length
+    masses_out.flush(); fps_out.flush()
+    del masses_out, fps_out
+    m = np.load(out / "masses.npy", mmap_mode="r")[:n]
+    np.save(out / "masses_trim.npy", m)
+    del m
+    f = np.load(out / "fps.npy", mmap_mode="r")[:n]
+    np.save(out / "fps_trim.npy", f)
+    del f
+    (out / "masses.npy").unlink(); (out / "fps.npy").unlink()
+    (out / "masses_trim.npy").rename(out / "masses.npy")
+    (out / "fps_trim.npy").rename(out / "fps.npy")
+    return n
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", default=str(ROOT / "data/pubchem/CID-SMILES.gz"))
@@ -92,10 +183,14 @@ def main() -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    t0 = time.time()
+    shard_dir = out / "shards"
+    if shard_dir.exists():
+        shutil.rmtree(shard_dir)
+    shard_dir.mkdir()
 
-    keys, smis, masses, fps = [], [], [], []
-    n_in = 0
+    t0 = time.time()
+    rows, shard_paths, n_in, n_kept = [], [], 0, 0
+
     with gzip.open(args.input, "rt") as fh, Pool(args.workers) as pool:
         def batches():
             batch = []
@@ -111,30 +206,28 @@ def main() -> None:
 
         for batch in batches():
             n_in += len(batch)
-            for r in pool.map(_process, batch, chunksize=1000):
-                if r is not None:
-                    keys.append(r[0]); smis.append(r[1]); masses.append(r[2]); fps.append(r[3])
-            if n_in % (CHUNK * 5) == 0:
+            rows.extend(r for r in pool.map(_process, batch, chunksize=1000) if r is not None)
+            if len(rows) >= SHARD_ROWS:
+                n_kept += len(rows)
+                shard_paths.append(_flush_shard(rows, shard_dir, len(shard_paths)))
+                rows = []
                 el = time.time() - t0
-                print(f"  read {n_in/1e6:.1f}M, kept {len(keys)/1e6:.2f}M ({len(keys)/max(n_in,1):.0%}), "
+                print(f"  read {n_in/1e6:.1f}M, kept {n_kept/1e6:.1f}M, {len(shard_paths)} shards, "
                       f"{n_in/el/1000:.0f}k/s, {el/60:.1f} min", flush=True)
             if args.limit and n_in >= args.limit:
                 break
 
-    print(f"parsed {n_in} lines, kept {len(keys)} ({time.time()-t0:.0f}s)")
+    if rows:
+        n_kept += len(rows)
+        shard_paths.append(_flush_shard(rows, shard_dir, len(shard_paths)))
+    print(f"pass 1 done: read {n_in}, kept {n_kept} in {len(shard_paths)} shards ({(time.time()-t0)/60:.1f} min)")
 
-    # Deduplicate on structure, then sort by mass so a mass window is a slice.
-    df = pd.DataFrame({"inchikey14": keys, "normalized_smiles": smis, "exact_mass": masses})
-    df["_fp"] = fps
-    df = df.drop_duplicates(subset=["inchikey14"], keep="first").sort_values("exact_mass").reset_index(drop=True)
-    print(f"unique structures: {len(df)}")
-
-    fp_arr = np.stack([np.frombuffer(b, dtype=np.uint64) for b in df["_fp"]])
-    np.save(out / "masses.npy", df["exact_mass"].to_numpy(dtype=np.float64))
-    np.save(out / "fps.npy", fp_arr)
-    df[["inchikey14", "normalized_smiles"]].to_parquet(out / "meta.parquet", index=False)
-    print(f"wrote {out}: masses {df.shape[0]}, fps {fp_arr.shape}, "
-          f"{fp_arr.nbytes/1e9:.1f} GB ({(time.time()-t0)/60:.1f} min total)")
+    n = _merge_shards(shard_paths, out)
+    print(f"pass 2 done: {n} unique structures after InChIKey14 dedup "
+          f"({n/max(n_kept,1):.0%} of kept)")
+    shutil.rmtree(shard_dir)
+    size = sum(f.stat().st_size for f in out.iterdir()) / 1e9
+    print(f"wrote {out}: {n} structures, {size:.1f} GB ({(time.time()-t0)/60:.1f} min total)")
 
 
 if __name__ == "__main__":

@@ -221,12 +221,26 @@ casmi-2026/
       ranker. Ensembling the two (probability-level average, via
       `pipeline_v3.predict_bit_probs` dispatch) is a wash on the hard set
       (0.4959) and clearly better on timsTOF (0.5923/0.4650).
-- [ ] Two candidates staged, both awaiting submission: the ft2_tan MLP
-      alone (kernel `casmi26-phase-3-fingerprint-model` v2) and the
-      MLP+transformer ensemble (kernel `casmi26-phase-3-ensemble`). The
-      real test is both natural-product chemistry *and* timsTOF, so it
-      sits between the two validation proxies — the leaderboard is the
-      tiebreaker.
+- [x] Both candidates submitted. ft2_tan MLP: **0.229** (new best, up
+      from 0.214). MLP+transformer ensemble: **0.230** — flat, within
+      noise. The transformer earns nothing on the real test despite
+      winning the timsTOF proxy, the third time the natural-product hard
+      set predicted the real outcome correctly while the timsTOF set
+      over-promised. **Chemistry match matters more than instrument match
+      for this test set** — worth weighting the hard set accordingly from
+      here on.
+- [ ] **The bottleneck is candidate-pool coverage, not ranking.** We score
+      ~0.50 on a validation set where pool coverage is 100%, and 0.23 on
+      the real test — a ratio of ~46%. COCONUT covers classic natural
+      products well (79% of RIKEN plant metabolites) but only 37% of the
+      GNPS natural-product community library and 39% of our own
+      hard-validation structures. The test set is explicitly "natural
+      products, hypothesised natural products, natural product analogs,
+      and synthetic molecules that might plausibly occur in nature" — the
+      analogs and synthetics live in PubChem, not COCONUT, so for a large
+      share of the test we cannot propose the right structure at all.
+      Fixing this (adding a PubChem-derived candidate pool) has far more
+      headroom than any further model work.
 - [ ] Not yet retried after the session that launched it was killed: a
       larger transformer (d=384, 6 layers, 8 epochs, ~50 min).
 - [ ] Class 3 de novo exploration

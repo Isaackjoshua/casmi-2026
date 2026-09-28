@@ -258,8 +258,16 @@ casmi-2026/
       | merged | 0.2052 | 0.1107 | 0.1479 |
       | **tiered** | **0.3854** | 0.0444 | **0.1785** |
 
-      Merging loses because 200–470 mass-matched distractors per window
-      cost more than the coverage gains. But the two columns win in
+      Merging loses because of how many mass-matched distractors it adds.
+      Measured at the real test molecules' masses, a ±1 mDa window holds a
+      median of **4,652** PubChem candidates (p90 14,727, max 30,103)
+      against the curated pool's 49 — ~95x more competitors. (An earlier
+      figure of 200–470 was measured at *round* masses like 350.000, which
+      are unusually sparse: real molecules cluster by mass defect, so exact
+      round masses are the emptiest regions of the mass axis. The
+      conclusions below were all measured end-to-end and are unaffected,
+      but the merged-pool coverage result is more impressive than it
+      looked — 0.1107 means finding the answer at ~rank 9 of ~4,650.) But the two columns win in
       disjoint places and the cost is purely displacement, so
       `src/pipeline_v4.py` *consults* PubChem rather than merging it:
       curated candidates keep the ranks they earn and PubChem fills only

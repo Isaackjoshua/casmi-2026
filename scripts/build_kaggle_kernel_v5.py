@@ -154,15 +154,24 @@ def build_notebook():
             'device = torch.device("cuda" if torch.cuda.is_available() else "cpu")\n'
             "model = load_fingerprint_model(MODEL_PATHS, device)\n"
             'print(f"ensemble of {len(MODEL_PATHS)} models loaded on {device}", flush=True)\n\n'
+            "# A valid submission exists before any of the expensive work starts, so\n"
+            "# nothing later can leave the run with no file at all. Version 1 of this\n"
+            "# notebook threw on the hidden-test rerun, and a single molecule with an\n"
+            "# adduct outside ADDUCT_SPEC is enough to do that.\n"
+            "FALLBACK = _global_fallback_candidates(library, None, N_GUESSES)\n"
+            'write_submission({mid: FALLBACK for mid in test["molecule_id"].unique()}, "submission.csv",\n'
+            "                 fallback=FALLBACK)\n"
+            'print(f"placeholder submission written; now computing the real one", flush=True)\n\n'
             "try:\n"
-            "    predictions = predict_test_set(test, library, pool, large, model, device)\n"
+            "    predictions = predict_test_set(test, library, pool, large, model, device,\n"
+            "                                   fallback=FALLBACK)\n"
             "except Exception as e:\n"
             "    print(f'ERROR: predict_test_set failed entirely ({type(e).__name__}: {e}); '\n"
-            "          f'falling back to library-frequency guesses for every molecule')\n"
-            "    predictions = {mid: _global_fallback_candidates(library, None, N_GUESSES) "
-            "for mid in test['molecule_id'].unique()}\n\n"
-            'write_submission(predictions, "submission.csv", '
-            f'sample_submission_path=f"{{DATA_DIR}}/sample_submission.csv")\n'
+            "          f'keeping library-frequency guesses for every molecule')\n"
+            "    predictions = {mid: FALLBACK for mid in test['molecule_id'].unique()}\n\n"
+            'write_submission(predictions, "submission.csv",\n'
+            f'                 sample_submission_path=f"{{DATA_DIR}}/sample_submission.csv",\n'
+            "                 fallback=FALLBACK)\n"
         )
     )
 

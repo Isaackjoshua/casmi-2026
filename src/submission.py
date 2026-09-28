@@ -9,6 +9,7 @@ import pandas as pd
 def build_submission(
     predictions: dict[str, Sequence[str]],
     sample_submission_path: Path | str | None = None,
+    fallback: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """predictions: molecule_id -> ranked list of up to 25 SMILES guesses,
     best guess first. Validates the hard requirements the host enforces:
@@ -24,15 +25,24 @@ def build_submission(
     predictions dict, built directly from the real test set, is the
     authoritative source; this check only ever informs, never blocks.
     """
-    rows = []
+    rows, patched = [], 0
     for mid, smiles_list in predictions.items():
-        if len(smiles_list) == 0:
-            raise ValueError(f"{mid} has zero guesses; must have >= 1")
-        if len(smiles_list) > 25:
-            raise ValueError(f"{mid} has {len(smiles_list)} guesses; max is 25")
-        if any(not s for s in smiles_list):
-            raise ValueError(f"{mid} has an empty/null SMILES guess")
-        rows.append({"molecule_id": mid, "smiles": ";".join(smiles_list)})
+        clean = [s for s in (smiles_list or []) if s]
+        if not clean:
+            # A molecule with no guesses used to raise here, which fails the
+            # entire notebook over one row. That is the wrong trade in a code
+            # competition: the run is scored on all the other molecules, and a
+            # wrong guess costs only this molecule's reciprocal rank. It
+            # happens for real -- an adduct outside ADDUCT_SPEC, or a
+            # precursor mass with no candidate in any window.
+            if not fallback:
+                raise ValueError(f"{mid} has zero guesses and no fallback was provided")
+            clean = list(fallback)
+            patched += 1
+        rows.append({"molecule_id": mid, "smiles": ";".join(clean[:25])})
+    if patched:
+        print(f"WARNING: {patched} molecule(s) had no guesses and were filled with the "
+              f"library-frequency fallback")
 
     df = pd.DataFrame(rows)
     if df["molecule_id"].duplicated().any():
@@ -47,6 +57,14 @@ def build_submission(
             if missing:
                 print(f"WARNING: {len(missing)} molecule_id(s) in sample_submission.csv missing from "
                       f"predictions, e.g. {sorted(missing)[:5]}")
+                # Add them rather than only reporting them: a molecule the host
+                # expects and we omit is scored as wrong anyway, but an
+                # incomplete file can be rejected outright.
+                if fallback:
+                    df = pd.concat([df, pd.DataFrame(
+                        [{"molecule_id": m, "smiles": ";".join(list(fallback)[:25])}
+                         for m in sorted(missing)])], ignore_index=True)
+                    print(f"  filled them with the library-frequency fallback")
             if extra:
                 print(f"WARNING: {len(extra)} predicted molecule_id(s) not in sample_submission.csv, "
                       f"e.g. {sorted(extra)[:5]}")
@@ -61,7 +79,9 @@ def write_submission(
     predictions: dict[str, Sequence[str]],
     path: Path,
     sample_submission_path: Path | str | None = None,
+    fallback: Sequence[str] | None = None,
 ) -> None:
-    df = build_submission(predictions, sample_submission_path=sample_submission_path)
+    df = build_submission(predictions, sample_submission_path=sample_submission_path,
+                          fallback=fallback)
     df.to_csv(path, index=False)
     print(f"Wrote {len(df)} rows to {path}")

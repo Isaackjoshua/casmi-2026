@@ -84,14 +84,16 @@ def main():
     ap.add_argument("--batch", type=int, default=256)
     ap.add_argument("--l2-to-init", type=float, default=1e-3,
                     help="pull (w,b) toward (1,0); the BCE-trained logits are a strong prior")
+    ap.add_argument("--decoy-file", default=str(P / "decoys.npz"),
+                    help="sampled (build_decoys.py) or mined (mine_decoys.py) negatives")
     ap.add_argument("--out", default=str(P / "bit_reranker.npz"))
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dec = np.load(P / "decoys.npz", allow_pickle=True)
+    dec = np.load(args.decoy_file, allow_pickle=True)
     dkeys, true_fp, decoy_fp, n_valid = dec["keys"], dec["true_fp"], dec["decoy_fp"], dec["n_valid"]
     K = decoy_fp.shape[1]
-    print(f"{len(dkeys):,} structures x {K} decoys", flush=True)
+    print(f"{len(dkeys):,} structures x {K} decoys from {Path(args.decoy_file).name}", flush=True)
 
     d = np.load(P / "fp_train_data.npz", allow_pickle=True)
     Xcsr = sp.csr_matrix((d["X_data"], d["X_indices"], d["X_indptr"]), shape=tuple(d["X_shape"]))

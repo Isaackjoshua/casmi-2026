@@ -130,8 +130,14 @@ def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool |
     return guesses[:N_GUESSES]
 
 
-def predict_test_set(test_df, lib, pool, large, model, device, alpha=ALPHA, verbose=True):
-    """molecule_id -> guesses, one prediction per molecule, never raising."""
+def predict_test_set(test_df, lib, pool, large, model, device, alpha=ALPHA, verbose=True,
+                     fallback=None):
+    """molecule_id -> guesses, one prediction per molecule, never raising.
+
+    Every molecule ends up with at least one guess: an empty result would
+    otherwise propagate to the submission writer, and one unguessable molecule
+    should cost its own reciprocal rank, not the whole run.
+    """
     out = {}
     groups = list(test_df.groupby("molecule_id"))
     for i, (mid, rows) in enumerate(groups):
@@ -143,6 +149,8 @@ def predict_test_set(test_df, lib, pool, large, model, device, alpha=ALPHA, verb
                 out[mid] = predict_curated(rows.to_dict("records"), lib, pool, model, device, alpha=alpha)
             except Exception:
                 out[mid] = []
+        if not out[mid] and fallback:
+            out[mid] = list(fallback)
         if verbose and (i + 1) % 50 == 0:
             print(f"  {i+1}/{len(groups)} molecules", flush=True)
     return out

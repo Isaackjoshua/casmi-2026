@@ -34,6 +34,47 @@ import numpy as np
 import pyarrow.parquet as pq
 
 
+class SplitMemmap:
+    """A (n, 32) uint64 array stored as several .npy shards, sliceable as one.
+
+    Kaggle's uploader is unreliable on single files of tens of GB, so the
+    24 GB fingerprint array ships as ~4 GB pieces. Only contiguous [lo:hi]
+    slicing and single-row indexing are needed, because every query reads
+    one contiguous mass window.
+    """
+
+    def __init__(self, paths):
+        self.parts = [np.load(p, mmap_mode="r") for p in paths]
+        self.offsets = np.cumsum([0] + [len(x) for x in self.parts])
+        self.shape = (int(self.offsets[-1]), int(self.parts[0].shape[1]))
+        self.dtype = self.parts[0].dtype
+
+    def __len__(self):
+        return self.shape[0]
+
+    def _part(self, row):
+        return int(np.searchsorted(self.offsets, row, side="right") - 1)
+
+    def __getitem__(self, key):
+        if not isinstance(key, slice):
+            i = self._part(int(key))
+            return self.parts[i][int(key) - self.offsets[i]]
+        lo, hi, step = key.indices(self.shape[0])
+        if step != 1:
+            raise ValueError("SplitMemmap supports contiguous slices only")
+        if hi <= lo:
+            return np.empty((0, self.shape[1]), dtype=self.dtype)
+        first, last = self._part(lo), self._part(hi - 1)
+        if first == last:
+            base = self.offsets[first]
+            return self.parts[first][lo - base : hi - base]
+        chunks = []
+        for i in range(first, last + 1):
+            base, end = self.offsets[i], self.offsets[i + 1]
+            chunks.append(self.parts[i][max(lo, base) - base : min(hi, end) - base])
+        return np.concatenate(chunks)
+
+
 @dataclass
 class LargePool:
     exact_mass: np.ndarray  # (n,) float64, ascending -- mass windows are slices of this
@@ -76,7 +117,15 @@ class LargePool:
 def load_large_pool(path: Path | str) -> LargePool:
     path = Path(path)
     masses = np.load(path / "masses.npy", mmap_mode="r")
-    fps = np.load(path / "fps.npy", mmap_mode="r")
+    if (path / "fps.npy").exists():
+        fps = np.load(path / "fps.npy", mmap_mode="r")
+    else:
+        shards = sorted(path.glob("fps_*.npy"))
+        if not shards:
+            raise FileNotFoundError(f"no fps.npy or fps_*.npy in {path}")
+        fps = SplitMemmap(shards)
+        if len(fps) != len(masses):
+            raise ValueError(f"fps shards hold {len(fps)} rows, masses.npy has {len(masses)}")
 
     pc_path = path / "popcount.npy"
     if pc_path.exists():
@@ -111,3 +160,19 @@ def tanimoto_against(pool: LargePool, lo: int, hi: int, anchor_words: np.ndarray
     inter = np.bitwise_count(cand & anchor_words[None, :]).sum(axis=1)
     union = pool.popcount[lo:hi].astype(np.int64) + anchor_pop - inter
     return np.divide(inter, union, out=np.zeros(hi - lo, dtype=np.float64), where=union > 0)
+
+def tanimoto_matrix(cand_words, cand_pop, anchor_words, anchor_pop):
+    """Tanimoto of every candidate against every anchor -> (n_cand, n_anchor).
+
+    Takes the window's fingerprints already materialized, because the caller
+    reads it once: computing this one anchor at a time re-sliced the memmap
+    per anchor, which on Kaggle's network-mounted input is the dominant cost
+    of a query.
+    """
+    cand_words = np.asarray(cand_words)
+    anchor_words = np.asarray(anchor_words)
+    if cand_words.shape[0] == 0 or anchor_words.shape[0] == 0:
+        return np.zeros((cand_words.shape[0], anchor_words.shape[0]), dtype=np.float64)
+    inter = np.bitwise_count(cand_words[:, None, :] & anchor_words[None, :, :]).sum(axis=2)
+    union = np.asarray(cand_pop, dtype=np.int64)[:, None] + np.asarray(anchor_pop, dtype=np.int64)[None, :] - inter
+    return np.divide(inter, union, out=np.zeros(inter.shape, dtype=np.float64), where=union > 0)

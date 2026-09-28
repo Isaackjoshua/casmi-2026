@@ -28,7 +28,7 @@ import torch
 from .baseline import FINE_TOP_N, N_GUESSES, Library, score_spectrum
 from .candidates import FP_BITS
 from .fingerprint_model import fingerprint_loglik_scores
-from .large_pool import LargePool, tanimoto_against, window
+from .large_pool import LargePool, tanimoto_matrix, window
 from .metric import to_inchikey14
 from .pipeline_v2 import MASS_WINDOW_WIDEN_CAP, MASS_WINDOW_WIDEN_FACTOR, merge_spectra
 from .pipeline_v3 import ALPHA, MODEL_FLOOR, _normalize, predict_bit_probs
@@ -63,6 +63,9 @@ def rank_large_pool(rows, lib, anchor_pool, pool, model, device, alpha=ALPHA,
         if hi <= lo:
             continue
 
+        # one read of the window, reused by both signals
+        cand_words = np.asarray(pool.fp_words[lo:hi])
+        cand_pop = np.asarray(pool.popcount[lo:hi], dtype=np.int64)
         fused = np.zeros(hi - lo, dtype=np.float64)
 
         if alpha > 0:
@@ -70,18 +73,24 @@ def rank_large_pool(rows, lib, anchor_pool, pool, model, device, alpha=ALPHA,
                 merged["ms2_mzs"], merged["ms2_normalized_intensities"], float(merged["precursor_mz"]),
                 str(merged["ionization_mode"]).strip().lower(), lib,
             )
-            prop = np.zeros(hi - lo, dtype=np.float64)
+            a_words, a_pop, sims = [], [], []
             for key, _smi, sim in anchors:
                 ai = anchor_pool.index_by_key.get(key)
                 if ai is None:
                     continue
-                t = tanimoto_against(pool, lo, hi, anchor_pool.fp_words[ai], int(anchor_pool.popcount[ai]))
-                np.maximum(prop, (sim ** exponent) * t, out=prop)
+                a_words.append(anchor_pool.fp_words[ai])
+                a_pop.append(int(anchor_pool.popcount[ai]))
+                sims.append(sim)
+            if a_words:
+                tan = tanimoto_matrix(cand_words, cand_pop, np.stack(a_words), np.array(a_pop))
+                prop = (tan * (np.asarray(sims, dtype=np.float64) ** exponent)[None, :]).max(axis=1)
+            else:
+                prop = np.zeros(hi - lo, dtype=np.float64)
             fused += alpha * _normalize(prop, 1.0 if prop.max() > 0 else 0.0)
 
         if alpha < 1:
             probs = predict_bit_probs(model, group, device).mean(axis=0)
-            bits = np.unpackbits(np.asarray(pool.fp_words[lo:hi]).view(np.uint8), axis=1)[:, :FP_BITS]
+            bits = np.unpackbits(cand_words.view(np.uint8), axis=1)[:, :FP_BITS]
             loglik = fingerprint_loglik_scores(probs, bits)
             fused += (1 - alpha) * (MODEL_FLOOR + (1 - MODEL_FLOOR) * _normalize(loglik, 1.0))
 

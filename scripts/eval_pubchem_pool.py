@@ -32,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import torch
 
 from src.baseline import FINE_TOP_N, N_GUESSES, build_library, score_spectrum
@@ -114,7 +115,7 @@ def predict_molecule_large(rows, lib, anchor_pool, pool, model, device, alpha=0.
     return list(final.values())
 
 
-def predict_hybrid(rows, lib, curated, large, model, device, alpha):
+def predict_hybrid(rows, lib, curated, large, model, device, alpha, tier1_cap=N_GUESSES):
     """The pool PubChem should actually ship as: curated candidates keep the
     ranks they already earn, and PubChem only fills the slots of the 25 they
     leave empty.
@@ -132,6 +133,8 @@ def predict_hybrid(rows, lib, curated, large, model, device, alpha):
         if k not in seen:
             seen.add(k)
             out.append(smi)
+        if len(out) >= tier1_cap:
+            break
     if len(out) < N_GUESSES:
         for smi in predict_molecule_large(rows, lib, curated, large, model, device, alpha):
             k = to_inchikey14(smi) or smi
@@ -141,6 +144,36 @@ def predict_hybrid(rows, lib, curated, large, model, device, alpha):
             if len(out) >= N_GUESSES:
                 break
     return out[:N_GUESSES]
+
+
+def keys_present(meta_path, wanted):
+    """Which of `wanted` the pool contains.
+
+    Not `set(read_parquet(...)["inchikey14"])`: materializing 94M Python
+    strings into a set cost ~25 minutes of CPU and 10 GB of RAM to answer a
+    question about 150 keys. pyarrow's is_in scans the column in C against a
+    150-element value set instead, and the answer is cached because it does
+    not change between runs.
+    """
+    import json
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    cache = Path(meta_path).parent / "key_presence_cache.json"
+    store = json.loads(cache.read_text()) if cache.exists() else {}
+    unknown = [k for k in wanted if k not in store]
+    if unknown:
+        value_set = pa.array(unknown, type=pa.string())
+        found = set()
+        pf = pq.ParquetFile(meta_path)
+        for batch in pf.iter_batches(columns=["inchikey14"], batch_size=2_000_000):
+            col = batch.column("inchikey14")
+            found.update(col.filter(pc.is_in(col, value_set=value_set)).to_pylist())
+            if len(found) == len(unknown):
+                break
+        store.update({k: (k in found) for k in unknown})
+        cache.write_text(json.dumps(store))
+    return {k for k in wanted if store.get(k)}
 
 
 def hard_set(train):
@@ -157,10 +190,12 @@ def coconut_only_pool(full_pool, coconut_keys):
     """
     from src.propagation import CandidatePool
 
-    # np.isin given a Python set silently matches nothing: it wraps the set
-    # in a 0-d object array instead of treating it as a collection.
-    coconut_arr = np.fromiter(coconut_keys, dtype=full_pool.inchikey14.dtype, count=len(coconut_keys))
-    keep = np.isin(full_pool.inchikey14, coconut_arr)
+    # Not np.isin: these keys are an object-dtype array of Python strings, for
+    # which numpy falls back to an O(n*m) loop -- 34 minutes here, measured.
+    # pandas hashes instead and returns the identical 479,717 rows in ~1s.
+    # (np.isin against the *set* is worse than slow: it wraps the set in a 0-d
+    # object array and silently matches nothing.)
+    keep = pd.Index(full_pool.inchikey14).isin(coconut_keys)
     keys = full_pool.inchikey14[keep]
     return CandidatePool(
         inchikey14=keys,
@@ -177,6 +212,8 @@ def main() -> None:
     ap.add_argument("--model", default=str(ROOT / "data/processed/peak_model_l_tan.pt"))
     ap.add_argument("--pubchem", default=str(ROOT / "data/pubchem/pubchem_pool"))
     ap.add_argument("--alpha", type=float, default=0.3)
+    ap.add_argument("--caps", default="3,5,8,12,25",
+                    help="how many of the 25 slots tier 1 may keep")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -187,48 +224,68 @@ def main() -> None:
     from src.propagation import load_candidate_pool
     small = load_candidate_pool(ROOT / "data/processed/candidate_fingerprints.parquet")
     large = load_large_pool(args.pubchem)
-    print(f"current pool: {len(small):,}   pubchem pool: {len(large):,}")
+    print(f"current pool: {len(small):,}   pubchem pool: {len(large):,}", flush=True)
+    _t = time.time()
 
     coconut_keys = set(
         pd.read_parquet(ROOT / "data/coconut/coconut_structures.parquet", columns=["inchikey"])["inchikey"]
         .str.split("-").str[0]
     )
     baseline_pool = coconut_only_pool(small, coconut_keys)
-    print(f"COCONUT-only pool (what a real Class 2 molecule faces): {len(baseline_pool):,}")
+    print(f"COCONUT-only pool (what a real Class 2 molecule faces): {len(baseline_pool):,}"
+          f"  [{time.time()-_t:.0f}s]", flush=True)
+    _t = time.time()
 
     hard = hard_set(train)
     keys = hard["inchikey14"].unique()
     in_coconut = set(k for k in keys if k in coconut_keys)
-    pubchem_keys = set(pd.read_parquet(Path(args.pubchem) / "meta.parquet", columns=["inchikey14"])["inchikey14"])
-    recovered = [k for k in keys if k not in coconut_keys and k in pubchem_keys]
+    missing = [k for k in keys if k not in coconut_keys]
+    pubchem_keys = keys_present(Path(args.pubchem) / "meta.parquet", missing)
+    recovered = [k for k in missing if k in pubchem_keys]
     print(f"hard set: {len(keys)} molecules -- {len(in_coconut)} in COCONUT (reachable today), "
-          f"{len(keys)-len(in_coconut)} not; PubChem recovers {len(recovered)} of those")
+          f"{len(keys)-len(in_coconut)} not; PubChem recovers {len(recovered)} of those"
+          f"  [{time.time()-_t:.0f}s]", flush=True)
 
     subsets = {
         "precision": hard[hard["inchikey14"].isin(in_coconut)],           # reachable either way
         "coverage": hard[~hard["inchikey14"].isin(in_coconut)],           # unreachable without PubChem
     }
+    caps = [int(c) for c in args.caps.split(",")]
+    scores, sizes = {}, {}
     for name, sample in subsets.items():
         if not len(sample):
             continue
         answers = sample.groupby("inchikey14")["normalized_smiles"].first().to_dict()
         groups = list(sample.groupby("inchikey14"))
-        print(f"\n[{name}] {len(groups)} molecules")
+        sizes[name] = len(groups)
+        print(f"\n[{name}] {len(groups)} molecules", flush=True)
+
+        def report(label, preds, t0):
+            m = mrr_at_25(preds, answers)
+            scores[(name, label)] = m
+            print(f"  {label:22s}: MRR@25={m:.4f} ({time.time()-t0:.0f}s)", flush=True)
 
         t0 = time.time()
-        cur = {k: predict_small(g.to_dict("records"), lib, baseline_pool, model, device, alpha=args.alpha)
-               for k, g in groups}
-        print(f"  COCONUT only   : MRR@25={mrr_at_25(cur, answers):.4f} ({time.time()-t0:.0f}s)", flush=True)
-
+        report("COCONUT only", {k: predict_small(g.to_dict("records"), lib, baseline_pool, model,
+                                                 device, alpha=args.alpha) for k, g in groups}, t0)
         t0 = time.time()
-        new = {k: predict_molecule_large(g.to_dict("records"), lib, small, large, model, device, args.alpha)
-               for k, g in groups}
-        print(f"  COCONUT+PubChem: MRR@25={mrr_at_25(new, answers):.4f} ({time.time()-t0:.0f}s)", flush=True)
+        report("COCONUT+PubChem", {k: predict_molecule_large(g.to_dict("records"), lib, small, large,
+                                                             model, device, args.alpha) for k, g in groups}, t0)
+        for cap in caps:
+            t0 = time.time()
+            report(f"tiered (cap {cap})",
+                   {k: predict_hybrid(g.to_dict("records"), lib, baseline_pool, large, model, device,
+                                      args.alpha, tier1_cap=cap) for k, g in groups}, t0)
 
-        t0 = time.time()
-        hyb = {k: predict_hybrid(g.to_dict("records"), lib, baseline_pool, large, model, device, args.alpha)
-               for k, g in groups}
-        print(f"  tiered         : MRR@25={mrr_at_25(hyb, answers):.4f} ({time.time()-t0:.0f}s)", flush=True)
+    # what matters is the whole hard set: the subsets are a partition of it, so
+    # weight each by its size. A strategy only ships if this column improves.
+    total = sum(sizes.values())
+    labels = ["COCONUT only", "COCONUT+PubChem"] + [f"tiered (cap {c})" for c in caps]
+    print(f"\n=== weighted over all {total} molecules ===", flush=True)
+    for label in labels:
+        if all((n, label) in scores for n in sizes):
+            w = sum(scores[(n, label)] * sizes[n] for n in sizes) / total
+            print(f"  {label:22s}: MRR@25={w:.4f}", flush=True)
 
 
 if __name__ == "__main__":

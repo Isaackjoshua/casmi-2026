@@ -117,6 +117,24 @@ def rank_large_pool(rows, lib, anchor_pool, pool, model, device, alpha=ALPHA,
 # keeps ALPHA = 0.3, where a genuine analog usually does exist.
 LARGE_ALPHA = 0.0
 
+# How many of the 25 slots tier 1 may keep. Tier 1 fills all 25 for half the
+# real test molecules, and whenever its pool lacks the answer those are 25
+# guesses that cannot be right. Capping is nearly free because tier 1's deep
+# ranks carry almost no value: measured at production density, going from 25
+# to 5 costs the reachable half 0.3% (0.7121 -> 0.7098) -- when the curated
+# pool holds the answer the ranker has it in the top 5 -- while the
+# unreachable half gains 19% (0.0580 -> 0.0693).
+#
+#   cap          3       5       8      12      18      25
+#   reachable  0.6978  0.7098  0.7098  0.7113  0.7121  0.7121
+#   unreach.   0.0743  0.0693  0.0652  0.0623  0.0599  0.0580
+#   weighted   0.3798  0.3832  0.3811  0.3803  0.3795  0.3785
+#
+# An earlier sweep found this knob flat, but it used a simulation that shrank
+# the curated pool to make answers unreachable, which also halved tier 1's
+# slot filling, so the cap barely bound. See scripts/eval_realistic_tiering.py.
+TIER1_CAP = 5
+
 # The 1 mDa window is instrument-limited, not distractor-limited: tightening it
 # to 0.5 or 0.3 mDa loses more answers than it removes competitors (0.1851 and
 # 0.1859 against 0.1907), and widening to 2 mDa is also worse (0.1869).
@@ -125,7 +143,7 @@ LARGE_MASS_WINDOW_DA = MASS_WINDOW_DA
 
 def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool | None,
                      model, device, alpha=ALPHA, large_alpha=LARGE_ALPHA,
-                     large_window=LARGE_MASS_WINDOW_DA) -> list:
+                     large_window=LARGE_MASS_WINDOW_DA, tier1_cap=TIER1_CAP) -> list:
     """Curated guesses first, then PubChem to fill the rest of the 25.
 
     The tier-2 blend weight and mass window are settable independently of
@@ -146,7 +164,18 @@ def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool |
                 return True
         return False
 
-    if add(predict_curated(rows, lib, pool, model, device, alpha=alpha)):
+    # Capping tier 1 only pays for itself if tier 2 can use the freed slots;
+    # with no large pool, giving up 20 of 25 guesses would be a pure loss.
+    cap = min(tier1_cap, N_GUESSES) if large is not None else N_GUESSES
+    for smi in predict_curated(rows, lib, pool, model, device, alpha=alpha):
+        key = to_inchikey14(smi) or smi
+        if key in seen:
+            continue
+        seen.add(key)
+        guesses.append(smi)
+        if len(guesses) >= cap:
+            break
+    if len(guesses) >= N_GUESSES:
         return guesses
     if large is not None:
         add(rank_large_pool(rows, lib, pool, large, model, device,

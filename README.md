@@ -305,6 +305,19 @@ casmi-2026/
 
 ## Design notes / known limitations
 
+- **A validation proxy has to preserve production *density*, not just
+  semantics.** The Class 2 simulation made answers unreachable by shrinking
+  the curated pool to COCONUT-only (479,717 of 729,387). That is honest
+  about coverage and wrong about density: tier 1 then filled a median of 10
+  of the 25 guess slots, where on the real test set it fills a median of
+  **25**. Since tier 2 only takes slots tier 1 leaves, the simulation handed
+  it early ranks it never gets in production — and predicted +15% for a
+  change that delivered +0.002 (0.230 → 0.232). It also reported the
+  tier-1 cap as flat, because at a fill of 10 the cap barely bound. The
+  corrected design (`scripts/eval_realistic_tiering.py`) removes from the
+  pool and library *only* the structures being scored, keeping everything
+  else, and splits them so half are reachable and half are not.
+
 - **Read each array out of an `.npz` exactly once.** Indexing an `NpzFile`
   re-reads and re-allocates the entire array on every access, and any view
   kept from it pins that whole copy alive. So

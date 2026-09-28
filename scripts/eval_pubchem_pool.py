@@ -1,21 +1,29 @@
-"""Decide whether the PubChem pool is worth shipping, by measuring the two
-effects it has -- separately, because they pull in opposite directions.
+"""Decide whether the 94M-structure PubChem pool is worth shipping, by
+measuring the two effects it has -- separately, because they pull in
+opposite directions.
 
-  coverage  -- structures absent from BOTH the anchor library AND the
-               current COCONUT/training pool. Today these score exactly
-               0.0: the right answer isn't in the candidate pool at all,
-               so no amount of ranking can find it. This is the gain.
+  coverage  -- a real Class 2 molecule has no public spectrum anywhere, so
+               it is NOT in any training library: its only route into the
+               pool is COCONUT. Sampling "uncovered" molecules from the
+               training data is therefore impossible (the pool contains
+               every training structure by construction). Instead, the
+               Class 2 situation is simulated by dropping training
+               structures from the pool, leaving COCONUT-only -- under
+               which the 61% of our hard-validation structures absent from
+               COCONUT are exactly as unreachable as a real Class 2
+               molecule. That subset is the coverage test.
 
   precision -- the existing 150-molecule hard validation set, which
-               already has 100% pool coverage. PubChem adds ~500
-               same-mass distractors per query where there used to be a
-               handful, so the true answer has to out-rank far more
+               already has 100% pool coverage. PubChem takes a 1 mDa mass
+               window from ~2 candidates to ~200-470 near the test's
+               median mass, so the true answer must out-rank far more
                competition. This is the cost.
 
-Ships only if the coverage gain outweighs the precision loss. Run both
-pools through the identical pipeline so the comparison is clean.
+Ships only if the gain outweighs the cost. Both pools run through the
+same scoring logic (a port of pipeline_v3.predict_molecule onto
+LargePool, which memory-maps rather than loading 24 GB).
 
-Run: PYTHONPATH=. python3 scripts/eval_pubchem_pool.py --model data/processed/fp_model_ft2_tan.pt
+Run: PYTHONPATH=. python3 scripts/eval_pubchem_pool.py
 """
 
 import argparse
@@ -26,49 +34,116 @@ import numpy as np
 import pandas as pd
 import torch
 
-from src.baseline import build_library
+from src.baseline import FINE_TOP_N, N_GUESSES, build_library, score_spectrum
+from src.candidates import FP_BITS
 from src.data import load_train
-from src.metric import mrr_at_25
-from src.pipeline_v3 import load_fingerprint_model, predict_molecule
-from src.propagation import CandidatePool, load_candidate_pool
+from src.fingerprint_model import fingerprint_loglik_scores
+from src.large_pool import load_large_pool, tanimoto_against, window
+from src.metric import mrr_at_25, to_inchikey14
+from src.pipeline_v2 import MASS_WINDOW_WIDEN_CAP, MASS_WINDOW_WIDEN_FACTOR, merge_spectra
+from src.pipeline_v3 import MODEL_FLOOR, _normalize, load_fingerprint_model, predict_bit_probs
+from src.pipeline_v3 import predict_molecule as predict_small
+from src.propagation import MASS_WINDOW_DA, PROPAGATION_EXPONENT, neutral_mass
 
 ROOT = Path(__file__).resolve().parents[1]
 FIVE = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2"]
 
 
-def load_pubchem_pool(path: Path, merge_with: CandidatePool | None = None) -> CandidatePool:
-    """Memory-map the PubChem arrays (tens of GB) rather than loading them.
-    Optionally merge the existing COCONUT/training pool in, keeping the
-    combined arrays mass-sorted -- the pipeline requires that ordering for
-    its binary-search mass window.
+def predict_molecule_large(rows, lib, anchor_pool, pool, model, device, alpha=0.3,
+                           mass_window_da=MASS_WINDOW_DA, exponent=PROPAGATION_EXPONENT):
+    """pipeline_v3.predict_molecule against a LargePool. Anchors resolve
+    against anchor_pool (the small in-memory pool: anchors are always
+    training structures); candidates come from pool.
     """
-    masses = np.load(path / "masses.npy", mmap_mode="r")
-    fps = np.load(path / "fps.npy", mmap_mode="r")
-    meta = pd.read_parquet(path / "meta.parquet")
-    keys = meta["inchikey14"].to_numpy()
-    smiles = meta["normalized_smiles"].to_numpy()
+    best_score, best_smiles = {}, {}
+    by_adduct = {}
+    for r in rows:
+        by_adduct.setdefault(r["adduct"], []).append(r)
 
-    if merge_with is not None:
-        # concatenate, drop structures already in PubChem, re-sort by mass
-        extra = ~np.isin(merge_with.inchikey14, keys)
-        masses = np.concatenate([np.asarray(masses), merge_with.exact_mass[extra]])
-        fps = np.concatenate([np.asarray(fps), merge_with.fp_words[extra]])
-        keys = np.concatenate([keys, merge_with.inchikey14[extra]])
-        smiles = np.concatenate([smiles, merge_with.normalized_smiles[extra]])
-        order = np.argsort(masses, kind="stable")
-        masses, fps, keys, smiles = masses[order], fps[order], keys[order], smiles[order]
+    for group in by_adduct.values():
+        merged = merge_spectra(group) if len(group) > 1 else group[0]
+        qmass = neutral_mass(float(merged["precursor_mz"]), merged["adduct"])
+        if qmass is None:
+            continue
 
-    return CandidatePool(
-        inchikey14=keys,
-        normalized_smiles=smiles,
-        exact_mass=np.asarray(masses, dtype=np.float64),
-        fp_words=fps,
-        popcount=np.bitwise_count(np.asarray(fps)).sum(axis=1).astype(np.int64),
-        index_by_key={k: i for i, k in enumerate(keys)},
-    )
+        lo, hi = window(pool, qmass, mass_window_da)
+        widen = mass_window_da
+        while hi <= lo and widen < MASS_WINDOW_WIDEN_CAP:
+            widen *= MASS_WINDOW_WIDEN_FACTOR
+            lo, hi = window(pool, qmass, widen)
+        if hi <= lo:
+            continue
+
+        fused = np.zeros(hi - lo, dtype=np.float64)
+
+        if alpha > 0:
+            anchors = score_spectrum(
+                merged["ms2_mzs"], merged["ms2_normalized_intensities"], float(merged["precursor_mz"]),
+                str(merged["ionization_mode"]).strip().lower(), lib,
+            )
+            prop = np.zeros(hi - lo, dtype=np.float64)
+            for key, _smi, sim in anchors:
+                ai = anchor_pool.index_by_key.get(key)
+                if ai is None:
+                    continue
+                t = tanimoto_against(pool, lo, hi, anchor_pool.fp_words[ai], int(anchor_pool.popcount[ai]))
+                np.maximum(prop, (sim ** exponent) * t, out=prop)
+            fused += alpha * _normalize(prop, 1.0 if prop.max() > 0 else 0.0)
+
+        if alpha < 1:
+            probs = predict_bit_probs(model, group, device).mean(axis=0)
+            bits = np.unpackbits(np.asarray(pool.fp_words[lo:hi]).view(np.uint8), axis=1)[:, :FP_BITS]
+            loglik = fingerprint_loglik_scores(probs, bits)
+            fused += (1 - alpha) * (MODEL_FLOOR + (1 - MODEL_FLOOR) * _normalize(loglik, 1.0))
+
+        top = np.argsort(fused)[::-1][:FINE_TOP_N]
+        top = top[fused[top] > 0]
+        for (key, smi), sc in zip(pool.rows(lo + top), fused[top]):
+            if sc > best_score.get(key, 0.0):
+                best_score[key] = float(sc)
+                best_smiles[key] = smi
+
+    final = {}
+    for key in sorted(best_score, key=best_score.get, reverse=True)[:FINE_TOP_N]:
+        smi = best_smiles[key]
+        ck = to_inchikey14(smi) or key
+        if ck not in final:
+            final[ck] = smi
+        if len(final) >= N_GUESSES:
+            break
+    return list(final.values())
 
 
-def hard_set(train: pd.DataFrame):
+def predict_hybrid(rows, lib, curated, large, model, device, alpha):
+    """The pool PubChem should actually ship as: curated candidates keep the
+    ranks they already earn, and PubChem only fills the slots of the 25 they
+    leave empty.
+
+    The two pools are good at opposite things -- curated wins on molecules it
+    contains (0.3854 vs 0.2052), PubChem is the only route to the ones it
+    doesn't (0.1107 vs 0.0147) -- and the cost of the big pool is entirely
+    that its distractors outrank true answers. Appending rather than merging
+    spends none of that cost: a curated hit cannot be displaced by a PubChem
+    candidate, because every PubChem candidate sits below all of them.
+    """
+    out, seen = [], set()
+    for smi in predict_small(rows, lib, curated, model, device, alpha=alpha):
+        k = to_inchikey14(smi) or smi
+        if k not in seen:
+            seen.add(k)
+            out.append(smi)
+    if len(out) < N_GUESSES:
+        for smi in predict_molecule_large(rows, lib, curated, large, model, device, alpha):
+            k = to_inchikey14(smi) or smi
+            if k not in seen:
+                seen.add(k)
+                out.append(smi)
+            if len(out) >= N_GUESSES:
+                break
+    return out[:N_GUESSES]
+
+
+def hard_set(train):
     lib_keys = set(train[train["ingest_lib"].isin(FIVE)]["inchikey14"])
     novel = train[train["ingest_lib"].isin(["massbank", "mona"])]
     novel = novel[~novel["inchikey14"].isin(lib_keys)]
@@ -76,31 +151,30 @@ def hard_set(train: pd.DataFrame):
     return novel[novel["inchikey14"].isin(keys)]
 
 
-def coverage_set(train: pd.DataFrame, current_pool_keys: set, n: int = 150):
-    """Structures the current pool cannot reach at all: absent from the
-    anchor library and absent from COCONUT+training. Scores 0.0 today.
+def coconut_only_pool(full_pool, coconut_keys):
+    """The pool a real Class 2 molecule actually faces: COCONUT, without
+    the training structures it could never have been in.
     """
-    lib_keys = set(train[train["ingest_lib"].isin(FIVE)]["inchikey14"])
-    novel = train[train["ingest_lib"].isin(["massbank", "mona", "spectraverse", "msdial"])]
-    novel = novel[~novel["inchikey14"].isin(lib_keys) & ~novel["inchikey14"].isin(current_pool_keys)]
-    uniq = novel["inchikey14"].drop_duplicates()
-    if len(uniq) == 0:
-        return novel.head(0)
-    keys = set(uniq.sample(n=min(n, len(uniq)), random_state=11))
-    return novel[novel["inchikey14"].isin(keys)]
+    from src.propagation import CandidatePool
 
-
-def evaluate(sample, lib, pool, model, device, alpha=0.3):
-    answers = sample.groupby("inchikey14")["normalized_smiles"].first().to_dict()
-    t0 = time.time()
-    preds = {k: predict_molecule(g.to_dict("records"), lib, pool, model, device, alpha=alpha)
-             for k, g in sample.groupby("inchikey14")}
-    return mrr_at_25(preds, answers), time.time() - t0
+    # np.isin given a Python set silently matches nothing: it wraps the set
+    # in a 0-d object array instead of treating it as a collection.
+    coconut_arr = np.fromiter(coconut_keys, dtype=full_pool.inchikey14.dtype, count=len(coconut_keys))
+    keep = np.isin(full_pool.inchikey14, coconut_arr)
+    keys = full_pool.inchikey14[keep]
+    return CandidatePool(
+        inchikey14=keys,
+        normalized_smiles=full_pool.normalized_smiles[keep],
+        exact_mass=full_pool.exact_mass[keep],
+        fp_words=full_pool.fp_words[keep],
+        popcount=full_pool.popcount[keep],
+        index_by_key={k: i for i, k in enumerate(keys)},
+    )
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default=str(ROOT / "data/processed/fp_model_ft2_tan.pt"))
+    ap.add_argument("--model", default=str(ROOT / "data/processed/peak_model_l_tan.pt"))
     ap.add_argument("--pubchem", default=str(ROOT / "data/pubchem/pubchem_pool"))
     ap.add_argument("--alpha", type=float, default=0.3)
     args = ap.parse_args()
@@ -110,25 +184,51 @@ def main() -> None:
     train = load_train()
     lib = build_library(train[train["ingest_lib"].isin(FIVE)])
 
-    current = load_candidate_pool(ROOT / "data/processed/candidate_fingerprints.parquet")
-    print(f"current pool: {len(current)} structures")
-    merged = load_pubchem_pool(Path(args.pubchem), merge_with=current)
-    print(f"merged pool:  {len(merged)} structures")
+    from src.propagation import load_candidate_pool
+    small = load_candidate_pool(ROOT / "data/processed/candidate_fingerprints.parquet")
+    large = load_large_pool(args.pubchem)
+    print(f"current pool: {len(small):,}   pubchem pool: {len(large):,}")
+
+    coconut_keys = set(
+        pd.read_parquet(ROOT / "data/coconut/coconut_structures.parquet", columns=["inchikey"])["inchikey"]
+        .str.split("-").str[0]
+    )
+    baseline_pool = coconut_only_pool(small, coconut_keys)
+    print(f"COCONUT-only pool (what a real Class 2 molecule faces): {len(baseline_pool):,}")
 
     hard = hard_set(train)
-    cover = coverage_set(train, set(current.inchikey14))
-    print(f"hard set:     {hard['inchikey14'].nunique()} molecules (100% covered today)")
-    print(f"coverage set: {cover['inchikey14'].nunique()} molecules (0% covered today)")
-    if len(cover):
-        in_new = np.isin(cover["inchikey14"].unique(), merged.inchikey14).mean()
-        print(f"              of which PubChem now covers: {in_new:.0%}")
+    keys = hard["inchikey14"].unique()
+    in_coconut = set(k for k in keys if k in coconut_keys)
+    pubchem_keys = set(pd.read_parquet(Path(args.pubchem) / "meta.parquet", columns=["inchikey14"])["inchikey14"])
+    recovered = [k for k in keys if k not in coconut_keys and k in pubchem_keys]
+    print(f"hard set: {len(keys)} molecules -- {len(in_coconut)} in COCONUT (reachable today), "
+          f"{len(keys)-len(in_coconut)} not; PubChem recovers {len(recovered)} of those")
 
-    for name, sample in [("hard", hard), ("coverage", cover)]:
+    subsets = {
+        "precision": hard[hard["inchikey14"].isin(in_coconut)],           # reachable either way
+        "coverage": hard[~hard["inchikey14"].isin(in_coconut)],           # unreachable without PubChem
+    }
+    for name, sample in subsets.items():
         if not len(sample):
             continue
-        for label, pool in [("current", current), ("merged", merged)]:
-            score, secs = evaluate(sample, lib, pool, model, device, args.alpha)
-            print(f"[{name:8s}] {label:7s} pool: MRR@25={score:.4f} ({secs:.0f}s)", flush=True)
+        answers = sample.groupby("inchikey14")["normalized_smiles"].first().to_dict()
+        groups = list(sample.groupby("inchikey14"))
+        print(f"\n[{name}] {len(groups)} molecules")
+
+        t0 = time.time()
+        cur = {k: predict_small(g.to_dict("records"), lib, baseline_pool, model, device, alpha=args.alpha)
+               for k, g in groups}
+        print(f"  COCONUT only   : MRR@25={mrr_at_25(cur, answers):.4f} ({time.time()-t0:.0f}s)", flush=True)
+
+        t0 = time.time()
+        new = {k: predict_molecule_large(g.to_dict("records"), lib, small, large, model, device, args.alpha)
+               for k, g in groups}
+        print(f"  COCONUT+PubChem: MRR@25={mrr_at_25(new, answers):.4f} ({time.time()-t0:.0f}s)", flush=True)
+
+        t0 = time.time()
+        hyb = {k: predict_hybrid(g.to_dict("records"), lib, baseline_pool, large, model, device, args.alpha)
+               for k, g in groups}
+        print(f"  tiered         : MRR@25={mrr_at_25(hyb, answers):.4f} ({time.time()-t0:.0f}s)", flush=True)
 
 
 if __name__ == "__main__":

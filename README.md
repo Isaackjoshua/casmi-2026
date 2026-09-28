@@ -229,7 +229,7 @@ casmi-2026/
       over-promised. **Chemistry match matters more than instrument match
       for this test set** — worth weighting the hard set accordingly from
       here on.
-- [ ] **The bottleneck is candidate-pool coverage, not ranking.** We score
+- [x] **The bottleneck is candidate-pool coverage, not ranking.** We score
       ~0.50 on a validation set where pool coverage is 100%, and 0.23 on
       the real test — a ratio of ~46%. COCONUT covers classic natural
       products well (79% of RIKEN plant metabolites) but only 37% of the
@@ -237,10 +237,59 @@ casmi-2026/
       hard-validation structures. The test set is explicitly "natural
       products, hypothesised natural products, natural product analogs,
       and synthetic molecules that might plausibly occur in nature" — the
-      analogs and synthetics live in PubChem, not COCONUT, so for a large
-      share of the test we cannot propose the right structure at all.
-      Fixing this (adding a PubChem-derived candidate pool) has far more
-      headroom than any further model work.
+      analogs and synthetics live in PubChem, not COCONUT.
+      Built a PubChem pool from the CID-SMILES bulk dump
+      (`scripts/build_pubchem_pool.py`): **94,043,986 structures, 28 GB**,
+      deduplicated on InChIKey14 and sorted by exact mass so a query's
+      mass window is a contiguous slice. It **contains 86 of the 91
+      hard-validation structures COCONUT misses (95%)**. Two passes
+      (shard, then k-way merge) because one pass projected to ~84 GB of
+      RAM; fingerprints live in their own `.npy` shards so a notebook can
+      memory-map 24 GB instead of loading it (`src/large_pool.py`).
+- [x] **Merging that pool in is a net loss; tiering it in is a win.**
+      Measured on the hard set split by whether COCONUT contains the
+      answer — the 91 that it doesn't are exactly as unreachable as a real
+      Class 2 molecule, which is the only honest way to simulate one
+      (every training structure is in the pool by construction):
+
+      | strategy | precision (59) | coverage (91) | weighted |
+      |---|---|---|---|
+      | curated only (deployed) | 0.3854 | 0.0147 | 0.1605 |
+      | merged | 0.2052 | 0.1107 | 0.1479 |
+      | **tiered** | **0.3854** | 0.0444 | **0.1785** |
+
+      Merging loses because 200–470 mass-matched distractors per window
+      cost more than the coverage gains. But the two columns win in
+      disjoint places and the cost is purely displacement, so
+      `src/pipeline_v4.py` *consults* PubChem rather than merging it:
+      curated candidates keep the ranks they earn and PubChem fills only
+      the slots of the 25 they leave empty. That preserves precision
+      exactly, so it cannot lose ground where the curated pool already
+      works. Sweeping how many slots tier 1 may keep is flat inside noise
+      (0.1783–0.1811 for caps 3–25), so it ships uncapped.
+- [x] **Two dead ends, both worth the cost of ruling out.**
+      *A natural-product filter on PubChem* would cut distractors ~2x, but
+      it cuts the answers PubChem uniquely recovers harder than it cuts
+      COCONUT (stereocentre: 84% of COCONUT, 32% of those answers) — they
+      are not natural-product-like, consistent with a test set of analogs
+      and synthetics, so filtering toward nature removes exactly what
+      coverage is for. *Gating between the pools per molecule* would be
+      worth a lot (a perfect choice scores 0.2187 vs tiering's 0.1785),
+      but there is no signal and it points the wrong way: the curated pool
+      looks *more* convincing when it does **not** hold the answer
+      (margin +0.13 vs −0.06), giving 42.8% accuracy against a 59.4% base
+      rate. At Tanimoto ~0.37 the predicted fingerprint cannot make the
+      true structure stand out from its isomers, which is the same
+      weakness that collapses precision when the pool grows. **The ranker
+      cannot self-diagnose, so remaining headroom is in the
+      spectrum-to-structure model, not in pool logic.**
+- [x] Re-compared model configs in the Class 2 simulation (earlier
+      comparisons used the full pool, which holds every answer by
+      construction and so was blind to coverage). Ensembling does not
+      help — the large transformer alone (0.1605/0.1785) beats every
+      ensemble of it, including the deployed pair (0.1588/0.1768) — but by
+      ~1%, inside noise at n=150. Kernel v5 therefore keeps the deployed
+      ensemble and changes only the pool, one variable at a time.
 - [ ] Not yet retried after the session that launched it was killed: a
       larger transformer (d=384, 6 layers, 8 epochs, ~50 min).
 - [ ] Class 3 de novo exploration

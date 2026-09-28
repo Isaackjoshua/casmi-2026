@@ -107,9 +107,32 @@ def rank_large_pool(rows, lib, anchor_pool, pool, model, device, alpha=ALPHA,
     return out
 
 
+# Tier 2 takes no propagation signal at all. Swept on the hard set, the
+# weighted score falls monotonically as tier-2 alpha rises -- 0.1907, 0.1894,
+# 0.1865, 0.1785, 0.1768 at alpha 0, 0.15, 0.3, 0.5, 0.7 -- and the coverage
+# half falls with it (0.0562 -> 0.0334). Propagation ranks a candidate by
+# Tanimoto to a library spectral analog, and a molecule that needs tier 2 is
+# precisely one with no analog in any library, so the signal is noise there;
+# among ~4,650 mass-matched candidates that noise costs real ranks. Tier 1
+# keeps ALPHA = 0.3, where a genuine analog usually does exist.
+LARGE_ALPHA = 0.0
+
+# The 1 mDa window is instrument-limited, not distractor-limited: tightening it
+# to 0.5 or 0.3 mDa loses more answers than it removes competitors (0.1851 and
+# 0.1859 against 0.1907), and widening to 2 mDa is also worse (0.1869).
+LARGE_MASS_WINDOW_DA = MASS_WINDOW_DA
+
+
 def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool | None,
-                     model, device, alpha=ALPHA) -> list:
-    """Curated guesses first, then PubChem to fill the rest of the 25."""
+                     model, device, alpha=ALPHA, large_alpha=LARGE_ALPHA,
+                     large_window=LARGE_MASS_WINDOW_DA) -> list:
+    """Curated guesses first, then PubChem to fill the rest of the 25.
+
+    The tier-2 blend weight and mass window are settable independently of
+    tier 1's: both were tuned against a window holding ~49 candidates, and
+    PubChem's holds ~4,650, so the balance between the propagation and model
+    signals and the tolerance worth allowing need not be the same.
+    """
     guesses, seen = [], set()
 
     def add(smiles_iter):
@@ -126,7 +149,9 @@ def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool |
     if add(predict_curated(rows, lib, pool, model, device, alpha=alpha)):
         return guesses
     if large is not None:
-        add(rank_large_pool(rows, lib, pool, large, model, device, alpha))
+        add(rank_large_pool(rows, lib, pool, large, model, device,
+                            alpha if large_alpha is None else large_alpha,
+                            mass_window_da=large_window))
     return guesses[:N_GUESSES]
 
 

@@ -305,6 +305,21 @@ casmi-2026/
 
 ## Design notes / known limitations
 
+- **Read each array out of an `.npz` exactly once.** Indexing an `NpzFile`
+  re-reads and re-allocates the entire array on every access, and any view
+  kept from it pins that whole copy alive. So
+  `{k: d["fp_table"][i] for i, k in enumerate(keys)}` allocates
+  `len(keys) x sizeof(fp_table)` and gets the process OOM-killed — this cost
+  two debugging cycles in `scripts/eval_reranker_full_window.py` and
+  `scripts/mine_decoys.py`. Assign the array to a local first and store
+  indices, not views.
+- **`np.isin` has no hash path for object dtype.** On arrays of Python
+  strings (which is what the InChIKey14 columns are) it falls back to an
+  O(n*m) loop: 34 minutes for 729k against 480k, where
+  `pd.Index(a).isin(b)` returns the identical result in ~1 second. Worse,
+  `np.isin(arr, some_set)` wraps the set in a 0-d object array and silently
+  matches nothing.
+
 - Library dedup keeps one representative spectrum per (structure, adduct) —
   picking the one with the most peaks. (Phase 2's `pipeline_v2.merge_spectra`
   does merge a *query* molecule's multiple collision-energy spectra before

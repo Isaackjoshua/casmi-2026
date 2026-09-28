@@ -11,6 +11,7 @@ that has tracked real outcomes.
 Run: PYTHONPATH=. python3 scripts/eval_reranker_pipeline.py
 """
 
+import argparse
 import importlib.util
 import time
 from pathlib import Path
@@ -34,6 +35,9 @@ FIVE = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2"]
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--reranker", default=str(P / "bit_reranker.npz"))
+    args = ap.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train = load_train()
     lib = build_library(train[train["ingest_lib"].isin(FIVE)])
@@ -55,7 +59,8 @@ def main():
           f"{len(groups)-len(in_coconut)} not)\n", flush=True)
 
     model = load_fingerprint_model([str(P / "fp_model.pt"), str(P / "peak_model.pt")], device)
-    rr = np.load(P / "bit_reranker.npz")
+    rr = np.load(args.reranker)
+    print(f"reranker: {Path(args.reranker).name}", flush=True)
 
     def run(label):
         out = {}

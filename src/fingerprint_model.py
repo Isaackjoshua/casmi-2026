@@ -147,6 +147,24 @@ def predict_probs(model: nn.Module, mat: sp.csr_matrix, device, batch_size: int 
     return np.concatenate(out) if out else np.zeros((0, FP_BITS), dtype=np.float32)
 
 
+# An optional learned reweighting of the logit vector, from
+# scripts/train_bit_reranker.py. The model is trained with per-bit BCE, which
+# optimizes bit prediction and not the ranking the score below performs, so
+# (w, b) are fitted directly against hard decoys from a candidate's own mass
+# window. w = 1, b = 0 is exactly the unmodified ranker. Module-level because
+# it is a property of the scoring function, like the checkpoint itself, and
+# threading it through every predict_* signature would touch four pipelines.
+_BIT_LOGIT_W = None
+_BIT_LOGIT_B = None
+
+
+def set_bit_logit_transform(w=None, b=None) -> None:
+    """Install (or, with no arguments, remove) the learned logit reweighting."""
+    global _BIT_LOGIT_W, _BIT_LOGIT_B
+    _BIT_LOGIT_W = None if w is None else np.asarray(w, dtype=np.float64)
+    _BIT_LOGIT_B = None if b is None else np.asarray(b, dtype=np.float64)
+
+
 def fingerprint_loglik_scores(probs: np.ndarray, candidate_bits: np.ndarray, eps: float = 1e-4) -> np.ndarray:
     """probs: (n_bits,) predicted P(bit=1). candidate_bits: (M, n_bits) in
     {0,1}. Returns per-candidate log-likelihood of each candidate's
@@ -157,4 +175,8 @@ def fingerprint_loglik_scores(probs: np.ndarray, candidate_bits: np.ndarray, eps
     """
     p = np.clip(probs.astype(np.float64), eps, 1 - eps)
     logit = np.log(p) - np.log1p(-p)
+    if _BIT_LOGIT_W is not None:
+        logit = _BIT_LOGIT_W * logit
+    if _BIT_LOGIT_B is not None:
+        logit = logit + _BIT_LOGIT_B
     return candidate_bits.astype(np.float64) @ logit

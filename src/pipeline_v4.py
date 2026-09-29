@@ -117,23 +117,17 @@ def rank_large_pool(rows, lib, anchor_pool, pool, model, device, alpha=ALPHA,
 # keeps ALPHA = 0.3, where a genuine analog usually does exist.
 LARGE_ALPHA = 0.0
 
-# How many of the 25 slots tier 1 may keep. Tier 1 fills all 25 for half the
-# real test molecules, and whenever its pool lacks the answer those are 25
-# guesses that cannot be right. Capping is nearly free because tier 1's deep
-# ranks carry almost no value: measured at production density, going from 25
-# to 5 costs the reachable half 0.3% (0.7121 -> 0.7098) -- when the curated
-# pool holds the answer the ranker has it in the top 5 -- while the
-# unreachable half gains 19% (0.0580 -> 0.0693).
+# How many of the 25 slots tier 1 may keep. Capping it to 5 was tried and
+# LOST on the leaderboard: 0.232 -> 0.229, against a corrected proxy that
+# predicted +0.003. Tier 1's deep ranks are worth more than tier 2's
+# candidates, so tier 1 keeps all 25 and tier 2 fills only what is left.
 #
-#   cap          3       5       8      12      18      25
-#   reachable  0.6978  0.7098  0.7098  0.7113  0.7121  0.7121
-#   unreach.   0.0743  0.0693  0.0652  0.0623  0.0599  0.0580
-#   weighted   0.3798  0.3832  0.3811  0.3803  0.3795  0.3785
-#
-# An earlier sweep found this knob flat, but it used a simulation that shrank
-# the curated pool to make answers unreachable, which also halved tier 1's
-# slot filling, so the cap barely bound. See scripts/eval_realistic_tiering.py.
-TIER1_CAP = 5
+# The proxy failed here for a second reason, after density (see
+# scripts/eval_realistic_tiering.py): difficulty. Its reachable half scores
+# 0.7121, so answers sit at rank 1-2 and ranks 6-25 are genuinely worthless
+# there. The real test's reachable molecules are far harder, so their ranks
+# 6-25 carry real weight and discarding them costs more than tier 2 returns.
+TIER1_CAP = N_GUESSES
 
 # The 1 mDa window is instrument-limited, not distractor-limited: tightening it
 # to 0.5 or 0.3 mDa loses more answers than it removes competitors (0.1851 and

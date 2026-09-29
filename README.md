@@ -305,6 +305,24 @@ casmi-2026/
 
 ## Design notes / known limitations
 
+- **Coverage was not the bottleneck; ranking is.** Phase 4 was built on the
+  estimate that only ~46% of test molecules had their answer in the
+  candidate pool, inferred from scoring ~0.50 locally at 100% coverage
+  against 0.23 on the leaderboard. That ratio conflates two things, and the
+  leaderboard says it is the other one. Two independent submissions each
+  imply a reachable share near 1.0:
+
+  | change | proxy deltas (reachable / unreachable) | observed | implied share |
+  |---|---|---|---|
+  | add the PubChem pool | +0.0000 / +0.0313 | +0.0020 | 0.94 |
+  | cap tier 1 at 5 | −0.0023 / +0.0113 | −0.0030 | 1.05 |
+
+  One parameter explains both results: essentially every real test molecule
+  is already in the curated pool, so a 94M-structure pool adds almost
+  nothing (+0.002) and taking slots away from tier 1 to give it room only
+  costs precision (−0.003). The local/leaderboard gap is difficulty, not
+  coverage — the real spectra are harder to rank, not absent from the pool.
+
 - **A validation proxy has to preserve production *density*, not just
   semantics.** The Class 2 simulation made answers unreachable by shrinking
   the curated pool to COCONUT-only (479,717 of 729,387). That is honest

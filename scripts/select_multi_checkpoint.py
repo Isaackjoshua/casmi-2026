@@ -51,8 +51,14 @@ SHIPPED = ["fp_model.pt", "peak_model_l_tan.pt"]
 M2_LO, M2_HI = OFFSETS["morgan2"]
 
 
+def _z(x):
+    sd = x.std()
+    return (x - x.mean()) / sd if sd > 0 else np.zeros_like(x)
+
+
 def predict_molecule_scored(rows, lib, pool, mpacked, device, alpha,
-                            base_model=None, multi_model=None, mode="shipped"):
+                            base_model=None, multi_model=None, mode="shipped",
+                            block_weight=None):
     """pipeline_v3.predict_molecule, with the model term swapped per `mode`.
 
     mode "shipped" reproduces the deployed scorer exactly (Morgan r2 only,
@@ -98,10 +104,20 @@ def predict_molecule_scored(rows, lib, pool, mpacked, device, alpha,
                 pm = predict_bit_probs(multi_model, group, device).mean(axis=0)
                 if mode == "multi":
                     loglik = fingerprint_loglik_scores(pm, mbits)
-                else:  # hybrid
+                else:  # hybrid, optionally with per-block standardization
                     pb = predict_bit_probs(base_model, group, device).mean(axis=0)
-                    loglik = (fingerprint_loglik_scores(pb, mbits[:, M2_LO:M2_HI])
-                              + fingerprint_loglik_scores(pm[M2_HI:], mbits[:, M2_HI:]))
+                    l_m2 = fingerprint_loglik_scores(pb, mbits[:, M2_LO:M2_HI])
+                    l_rest = fingerprint_loglik_scores(pm[M2_HI:], mbits[:, M2_HI:])
+                    if block_weight is None:
+                        loglik = l_m2 + l_rest
+                    else:
+                        # Summing raw log-likelihoods lets whichever block has
+                        # the larger spread dominate, and MACCS is both dense
+                        # (28% of bits on) and the best-predicted block, so it
+                        # can swamp the Morgan-r2 signal two submissions were
+                        # built on. Standardizing each block within the window
+                        # makes the weight, not the scale, decide.
+                        loglik = _z(l_m2) + block_weight * _z(l_rest)
             fused += (1 - alpha) * (MODEL_FLOOR + (1 - MODEL_FLOOR) * _normalize(loglik, 1.0))
 
         top = np.argsort(fused)[::-1][:FINE_TOP_N]
@@ -135,6 +151,8 @@ def main():
     ap.add_argument("--n", type=int, default=600)
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--epochs", default="1,2,3,4,5,6,7,8")
+    ap.add_argument("--weights", default="0.0,0.25,0.5,1.0",
+                    help="weight on the standardized morgan3+maccs blocks; 0 recovers shipped")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -168,17 +186,21 @@ def main():
         if not path.exists():
             continue
         mm = load_fingerprint_model(str(path), device)
-        for mode in ("multi", "hybrid"):
+        modes = [("multi", None), ("hybrid", None)]
+        modes += [(f"w={w}", w) for w in [float(x) for x in args.weights.split(",")]]
+        for label, bw in modes:
+            mode = "multi" if label == "multi" else "hybrid"
             t0 = time.time()
             res = {k: reciprocal_rank(
                 predict_molecule_scored(g.to_dict("records"), lib, pool, mpacked, device, ALPHA,
-                                        base_model=base_model, multi_model=mm, mode=mode), k)
+                                        base_model=base_model, multi_model=mm, mode=mode,
+                                        block_weight=bw), k)
                 for k, g in groups}
             d = np.array([res[k] - base[k] for k, _ in groups])
             ci = 1.96 * d.std(ddof=1) / np.sqrt(len(d))
             sig = abs(d.mean()) > ci
             verdict = ("BETTER" if d.mean() > 0 else "worse") if sig else "ns"
-            print(f"{'multi_model_e'+str(e):22s} {mode:8s} "
+            print(f"{'multi_model_e'+str(e):22s} {label:8s} "
                   f"{np.mean(list(res.values())):7.4f} {d.mean():+12.4f} {ci:9.4f}  {verdict}"
                   f"  ({time.time()-t0:.0f}s)", flush=True)
         del mm

@@ -60,9 +60,34 @@ def compute(smiles_list, label):
 def main():
     print(f"stack = {TOTAL_BITS} bits packed into {PACKED_BYTES} bytes\n", flush=True)
 
-    pool_df = pd.read_parquet(P / "candidate_fingerprints.parquet",
-                              columns=["inchikey14", "normalized_smiles"])
-    packed, ok = compute(pool_df["normalized_smiles"].tolist(), "pool")
+    # Build in the POOL's row order, not the parquet's. candidate_pool_from_df
+    # sorts by exact_mass, so the two differ -- and indexing one with the
+    # other's indices scores every candidate against an unrelated molecule's
+    # fingerprint, which cost -0.18 MRR before it was caught. Taking the
+    # SMILES from the loaded pool makes the alignment true by construction,
+    # rather than re-deriving a sort (pandas' default sort is not stable, so
+    # mass ties need not order the same way twice).
+    from src.pipeline_v3 import candidate_bits
+    from src.propagation import load_candidate_pool
+    from src.multi_fingerprint import OFFSETS
+
+    pool = load_candidate_pool(P / "candidate_fingerprints.parquet")
+    packed, ok = compute(list(pool.normalized_smiles), "pool")
+
+    # and check it: the morgan2 block must equal the pool's own fingerprint
+    a, b = OFFSETS["morgan2"]
+    rng = np.random.default_rng(0)
+    probe = np.sort(rng.choice(len(pool), size=2000, replace=False))
+    mine = np.unpackbits(packed[probe], axis=1)[:, a:b]
+    theirs = np.stack([candidate_bits(pool, int(i), int(i) + 1)[0] for i in probe])
+    if not np.array_equal(mine, theirs):
+        bad = int((mine != theirs).any(axis=1).sum())
+        raise SystemExit(f"ABORT: morgan2 block disagrees with the pool's own "
+                         f"fingerprint for {bad}/{len(probe)} probed rows -- "
+                         f"the rows are misaligned")
+    print(f"  verified: morgan2 block matches the pool's fingerprint on "
+          f"{len(probe)} probed rows", flush=True)
+
     np.save(P / "pool_multi_fp.npy", packed)
     np.save(P / "pool_multi_fp_ok.npy", ok)
     print(f"wrote pool_multi_fp.npy {packed.shape} "

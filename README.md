@@ -61,6 +61,25 @@ casmi-2026/
 
 ## Current status
 
+**Public leaderboard: 0.240** (MRR@25), from 0.063 at the first submission.
+
+| submission | public | what changed |
+|---|---|---|
+| Phase 1 | 0.063 | library search over deduplicated reference spectra |
+| Phase 2 | 0.194 | COCONUT candidate pool, mass window tightened 150 Da → 1 mDa |
+| Phase 3 | 0.230 | learned spectrum→fingerprint model, fused with analog propagation |
+| Phase 4 | 0.232 | tiered PubChem pool (94M structures, memory-mapped) |
+| Phase 5 | 0.236 | large peak transformer in the ensemble |
+| Phase 5 | **0.240** | its best-Tanimoto checkpoint |
+
+The last two came from changing the *measurement*, not the search: a paired
+per-molecule test (`scripts/sweep_paired.py`) resolves the ~0.01 MRR effects
+this pipeline actually turns on, which n=150 with unpaired means cannot. It
+found two real gains in two sweeps and predicted both leaderboard moves
+correctly (+0.005 predicted / +0.004 actual, then +0.003 / +0.004) — after
+proxy-driven estimates of +15% delivered +0.002, and +1.2% delivered −0.003.
+Anything that harness reports as `ns` is genuinely not worth chasing.
+
 - [x] Kaggle API configured, rules accepted
 - [x] Data downloaded (train: 2,539,608 spectra; test: 1,213 spectra / 400 molecules)
 - [x] Baseline pipeline reproduced — see `src/baseline.py`. Coarse sparse-cosine

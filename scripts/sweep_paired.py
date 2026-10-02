@@ -29,6 +29,8 @@ import numpy as np
 import torch
 
 import src.baseline as baseline
+import src.pipeline_v2 as pipeline_v2
+import src.pipeline_v3 as pipeline_v3
 from src.baseline import build_library
 from src.data import load_train
 from src.metric import to_inchikey14
@@ -40,7 +42,8 @@ P = ROOT / "data/processed"
 FIVE = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2"]
 ALL_LIBS = FIVE + ["massbank", "mona", "spectraverse", "msdial", "drug_plus", "masaryk"]
 
-BASE_MODEL = ["fp_model.pt", "peak_model.pt"]
+# the shipped configuration as of the 0.236 submission
+BASE_MODEL = ["fp_model.pt", "peak_model_l.pt"]
 
 
 def reciprocal_rank(guesses, target):
@@ -85,13 +88,32 @@ def main():
         return models[k]
 
     def run(model_names=BASE_MODEL, exponent=PROPAGATION_EXPONENT,
-            window=MASS_WINDOW_DA, alpha=ALPHA, coarse=None, fine=None):
-        """Per-molecule reciprocal rank under one configuration."""
+            window=MASS_WINDOW_DA, alpha=ALPHA, coarse=None, fine=None,
+            model_floor=None, merge_tol=None, prec_bonus=None, prec_ppm=None):
+        """Per-molecule reciprocal rank under one configuration.
+
+        The constants live as module globals read at call time, so they are
+        patched here and restored in the finally block. merge_spectra is the
+        exception: pipeline_v3 imported the name, and its tolerance is a
+        default argument bound at definition, so the wrapper replaces the
+        name in pipeline_v3's own namespace.
+        """
         old_c, old_f = baseline.COARSE_TOP_K, baseline.FINE_TOP_N
+        old_floor, old_merge = pipeline_v3.MODEL_FLOOR, pipeline_v3.merge_spectra
+        old_pb, old_ppm = baseline.PRECURSOR_BONUS, baseline.PRECURSOR_PPM_BONUS_WINDOW
         if coarse is not None:
             baseline.COARSE_TOP_K = coarse
         if fine is not None:
             baseline.FINE_TOP_N = fine
+        if model_floor is not None:
+            pipeline_v3.MODEL_FLOOR = model_floor
+        if merge_tol is not None:
+            _orig = pipeline_v2.merge_spectra
+            pipeline_v3.merge_spectra = lambda rows, tol_da=merge_tol: _orig(rows, tol_da)
+        if prec_bonus is not None:
+            baseline.PRECURSOR_BONUS = prec_bonus
+        if prec_ppm is not None:
+            baseline.PRECURSOR_PPM_BONUS_WINDOW = prec_ppm
         try:
             model = get_model(model_names)
             out = {}
@@ -102,6 +124,9 @@ def main():
             return out
         finally:
             baseline.COARSE_TOP_K, baseline.FINE_TOP_N = old_c, old_f
+            pipeline_v3.MODEL_FLOOR, pipeline_v3.merge_spectra = old_floor, old_merge
+            baseline.PRECURSOR_BONUS = old_pb
+            baseline.PRECURSOR_PPM_BONUS_WINDOW = old_ppm
 
     t0 = time.time()
     base = run()
@@ -109,16 +134,32 @@ def main():
     print(f"shipped configuration: MRR@25 {base_mrr:.4f}  ({time.time()-t0:.0f}s)\n", flush=True)
 
     candidates = [
-        ("exponent 1.5", dict(exponent=1.5)),
-        ("exponent 2.0", dict(exponent=2.0)),
-        ("exponent 3.0", dict(exponent=3.0)),
-        ("exponent 3.5", dict(exponent=3.5)),
-        ("COARSE_TOP_K 150", dict(coarse=150)),
-        ("COARSE_TOP_K 600", dict(coarse=600)),
-        ("anchors FINE_TOP_N 25", dict(fine=25)),
-        ("anchors FINE_TOP_N 100", dict(fine=100)),
-        ("model peak_model_l alone", dict(model_names=["peak_model_l.pt"])),
-        ("model fp+peak_l", dict(model_names=["fp_model.pt", "peak_model_l.pt"])),
+        # more model pairings: the model choice was the only thing the first
+        # sweep found to matter, so it is where another look is worth most
+        ("model ft2_tan+peak_l", dict(model_names=["fp_model_ft2_tan.pt", "peak_model_l.pt"])),
+        ("model v2+peak_l", dict(model_names=["fp_model_v2.pt", "peak_model_l.pt"])),
+        ("model fp+peak_l_tan", dict(model_names=["fp_model.pt", "peak_model_l_tan.pt"])),
+        ("model fp+peak+peak_l", dict(model_names=["fp_model.pt", "peak_model.pt",
+                                                   "peak_model_l.pt"])),
+        ("model ft2_tan+fp+peak_l", dict(model_names=["fp_model_ft2_tan.pt", "fp_model.pt",
+                                                      "peak_model_l.pt"])),
+        # alpha was tuned against the previous ensemble; the optimum can move
+        ("alpha 0.20", dict(alpha=0.20)),
+        ("alpha 0.25", dict(alpha=0.25)),
+        ("alpha 0.35", dict(alpha=0.35)),
+        ("alpha 0.40", dict(alpha=0.40)),
+        # never tuned at all
+        ("MODEL_FLOOR 0.00", dict(model_floor=0.0)),
+        ("MODEL_FLOOR 0.02", dict(model_floor=0.02)),
+        ("MODEL_FLOOR 0.10", dict(model_floor=0.10)),
+        ("MODEL_FLOOR 0.20", dict(model_floor=0.20)),
+        ("MERGE_TOL_DA 0.01", dict(merge_tol=0.01)),
+        ("MERGE_TOL_DA 0.05", dict(merge_tol=0.05)),
+        ("PRECURSOR_BONUS 0.0", dict(prec_bonus=0.0)),
+        ("PRECURSOR_BONUS 0.10", dict(prec_bonus=0.10)),
+        ("precursor ppm 10", dict(prec_ppm=10)),
+        ("mass window 0.7 mDa", dict(window=0.0007)),
+        ("mass window 1.5 mDa", dict(window=0.0015)),
     ]
 
     if args.only:

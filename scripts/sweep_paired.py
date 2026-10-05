@@ -42,8 +42,8 @@ P = ROOT / "data/processed"
 FIVE = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2"]
 ALL_LIBS = FIVE + ["massbank", "mona", "spectraverse", "msdial", "drug_plus", "masaryk"]
 
-# the shipped configuration as of the 0.236 submission
-BASE_MODEL = ["fp_model.pt", "peak_model_l.pt"]
+# the shipped configuration as of the 0.240 submission
+BASE_MODEL = ["fp_model.pt", "peak_model_l_tan.pt"]
 
 
 def reciprocal_rank(guesses, target):
@@ -134,32 +134,25 @@ def main():
     print(f"shipped configuration: MRR@25 {base_mrr:.4f}  ({time.time()-t0:.0f}s)\n", flush=True)
 
     candidates = [
-        # more model pairings: the model choice was the only thing the first
-        # sweep found to matter, so it is where another look is worth most
-        ("model ft2_tan+peak_l", dict(model_names=["fp_model_ft2_tan.pt", "peak_model_l.pt"])),
-        ("model v2+peak_l", dict(model_names=["fp_model_v2.pt", "peak_model_l.pt"])),
-        ("model fp+peak_l_tan", dict(model_names=["fp_model.pt", "peak_model_l_tan.pt"])),
-        ("model fp+peak+peak_l", dict(model_names=["fp_model.pt", "peak_model.pt",
-                                                   "peak_model_l.pt"])),
-        ("model ft2_tan+fp+peak_l", dict(model_names=["fp_model_ft2_tan.pt", "fp_model.pt",
-                                                      "peak_model_l.pt"])),
-        # alpha was tuned against the previous ensemble; the optimum can move
+        # The winning axis has been fp_model + the best peak transformer, and
+        # replacing the fp side lost both times it was tried. These are the
+        # pairings around the new incumbent that have not been asked yet.
+        ("model fp+peak_l+peak_l_tan", dict(model_names=["fp_model.pt", "peak_model_l.pt",
+                                                         "peak_model_l_tan.pt"])),
+        ("model peak_l+peak_l_tan", dict(model_names=["peak_model_l.pt",
+                                                      "peak_model_l_tan.pt"])),
+        ("model fp+peak_tan+peak_l_tan", dict(model_names=["fp_model.pt", "peak_model_tan.pt",
+                                                           "peak_model_l_tan.pt"])),
+        ("model ft2+peak_l_tan", dict(model_names=["fp_model_ft2.pt", "peak_model_l_tan.pt"])),
+        ("model v2_tan+peak_l_tan", dict(model_names=["fp_model_v2_tan.pt",
+                                                      "peak_model_l_tan.pt"])),
+        ("model peak_l_tan alone", dict(model_names=["peak_model_l_tan.pt"])),
+        ("model fp+ft2_tan+peak_l_tan", dict(model_names=["fp_model.pt", "fp_model_ft2_tan.pt",
+                                                          "peak_model_l_tan.pt"])),
+        # alpha once more: the ensemble changed again, and 0.20/0.25 were the
+        # only non-negative directions last time
         ("alpha 0.20", dict(alpha=0.20)),
         ("alpha 0.25", dict(alpha=0.25)),
-        ("alpha 0.35", dict(alpha=0.35)),
-        ("alpha 0.40", dict(alpha=0.40)),
-        # never tuned at all
-        ("MODEL_FLOOR 0.00", dict(model_floor=0.0)),
-        ("MODEL_FLOOR 0.02", dict(model_floor=0.02)),
-        ("MODEL_FLOOR 0.10", dict(model_floor=0.10)),
-        ("MODEL_FLOOR 0.20", dict(model_floor=0.20)),
-        ("MERGE_TOL_DA 0.01", dict(merge_tol=0.01)),
-        ("MERGE_TOL_DA 0.05", dict(merge_tol=0.05)),
-        ("PRECURSOR_BONUS 0.0", dict(prec_bonus=0.0)),
-        ("PRECURSOR_BONUS 0.10", dict(prec_bonus=0.10)),
-        ("precursor ppm 10", dict(prec_ppm=10)),
-        ("mass window 0.7 mDa", dict(window=0.0007)),
-        ("mass window 1.5 mDa", dict(window=0.0015)),
     ]
 
     if args.only:

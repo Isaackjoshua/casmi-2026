@@ -16,6 +16,45 @@ canonicalization + InChIKey14 (connectivity only, stereochemistry ignored).
 - Final submission deadline: 2026-12-14
 - Max 5 submissions/day, 2 final submissions selected
 
+## If the machine restarts mid-run
+
+Nothing here needs to be redone from scratch. Everything expensive is
+written to disk as it is produced, so a shutdown costs at most the single
+epoch that was in progress.
+
+**Safe across a restart** — all of `data/processed/`: the candidate pool and
+its fingerprints (`candidate_fingerprints.parquet`, `pool_multi_fp.npy`,
+`pool_fp2.npy`), the training targets (`train_multi_fp.npz`,
+`train_fp2.npz`), every model checkpoint, and the 28 GB PubChem pool under
+`data/pubchem/`. Also safe: everything pushed to git, and everything already
+on Kaggle (datasets, kernel versions, submissions).
+
+**Resume the only long job — training.** Checkpoints are written every epoch,
+so point `--resume` at the same prefix and it continues from the highest one:
+
+```bash
+cd ~/Desktop/isaack/casmi-2026
+PYTHONPATH=. python3 scripts/train_multi_fingerprint.py --stack v2 --epochs 8 --resume
+```
+
+It prints which checkpoint it resumed from and which epoch it continues at.
+Checkpoints written from now on also carry the optimizer and scheduler
+state, so a resume is exact; older ones hold weights only, in which case the
+learning-rate schedule is fast-forwarded to the right step and the optimizer
+moments are lost (stated in the log when it happens).
+
+**Everything else is stateless — just re-run it.** The sweeps and selectors
+(`scripts/sweep_paired.py`, `scripts/select_multi_checkpoint.py`) hold no
+state and take minutes. The `until ...; do sleep; done` shells that wait on
+jobs are disposable; nothing depends on them.
+
+**Check what is still running** before assuming anything was lost:
+
+```bash
+ps -eo pid,etime,cmd | grep "python3 -u scripts" | grep -v grep
+ls -t data/processed/*_e*.pt | head
+```
+
 ## Project layout
 
 ```

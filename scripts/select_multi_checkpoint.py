@@ -58,7 +58,7 @@ def _z(x):
 
 def predict_molecule_scored(rows, lib, pool, mpacked, device, alpha,
                             base_model=None, multi_model=None, mode="shipped",
-                            block_weight=None):
+                            block_weight=None, block="both"):
     """pipeline_v3.predict_molecule, with the model term swapped per `mode`.
 
     mode "shipped" reproduces the deployed scorer exactly (Morgan r2 only,
@@ -107,7 +107,11 @@ def predict_molecule_scored(rows, lib, pool, mpacked, device, alpha,
                 else:  # hybrid, optionally with per-block standardization
                     pb = predict_bit_probs(base_model, group, device).mean(axis=0)
                     l_m2 = fingerprint_loglik_scores(pb, mbits[:, M2_LO:M2_HI])
-                    l_rest = fingerprint_loglik_scores(pm[M2_HI:], mbits[:, M2_HI:])
+                    if block == "both":
+                        sl = slice(M2_HI, TOTAL_BITS)
+                    else:
+                        sl = slice(*OFFSETS[block])
+                    l_rest = fingerprint_loglik_scores(pm[sl], mbits[:, sl])
                     if block_weight is None:
                         loglik = l_m2 + l_rest
                     else:
@@ -153,6 +157,9 @@ def main():
     ap.add_argument("--epochs", default="1,2,3,4,5,6,7,8")
     ap.add_argument("--weights", default="0.0,0.25,0.5,1.0",
                     help="weight on the standardized morgan3+maccs blocks; 0 recovers shipped")
+    ap.add_argument("--block", default="both", choices=["both", "morgan3", "maccs"],
+                    help="which orthogonal block to score with, to see which one earned "
+                         "the +0.005 -- that decides what is worth adding next")
     ap.add_argument("--sources", default="massbank,mona",
                     help="which libraries to draw the held-out molecules from. The "
                          "massbank/mona pool is only 2095 structures, so asking for more "
@@ -185,7 +192,8 @@ def main():
     pool = load_candidate_pool(P / "candidate_fingerprints.parquet")
     mpacked = np.load(P / "pool_multi_fp.npy")
     groups = list(sample.groupby("inchikey14"))
-    print(f"{len(groups)} molecules; pool multi-fp {mpacked.shape}\n", flush=True)
+    print(f"{len(groups)} molecules; pool multi-fp {mpacked.shape}; "
+          f"orthogonal block = {args.block}\n", flush=True)
 
     base_model = load_fingerprint_model([str(P / m) for m in SHIPPED], device)
     t0 = time.time()
@@ -210,7 +218,7 @@ def main():
             res = {k: reciprocal_rank(
                 predict_molecule_scored(g.to_dict("records"), lib, pool, mpacked, device, ALPHA,
                                         base_model=base_model, multi_model=mm, mode=mode,
-                                        block_weight=bw), k)
+                                        block_weight=bw, block=args.block), k)
                 for k, g in groups}
             d = np.array([res[k] - base[k] for k, _ in groups])
             ci = 1.96 * d.std(ddof=1) / np.sqrt(len(d))

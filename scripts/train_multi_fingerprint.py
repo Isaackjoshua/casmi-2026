@@ -29,7 +29,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.multi_fingerprint import OFFSETS, TOTAL_BITS
 from src.peak_transformer import PeakTransformer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,15 +84,31 @@ def main():
     ap.add_argument("--heads", type=int, default=8)
     ap.add_argument("--dropout", type=float, default=0.1)
     ap.add_argument("--weight-decay", type=float, default=1e-2)
-    ap.add_argument("--prefix", default=str(P / "multi_model"))
+    ap.add_argument("--stack", default="v1", choices=["v1", "v2"],
+                    help="v1 = Morgan r2/r3 + MACCS (3239 bits); v2 adds atom-pair, "
+                         "torsion and feature-Morgan (9383 bits)")
+    ap.add_argument("--prefix", default=None)
+    ap.add_argument("--resume", action="store_true",
+                    help="continue from the highest {prefix}_e{N}.pt on disk instead of "
+                         "starting over. A run loses at most the epoch in progress.")
     args = ap.parse_args()
+
+    if args.stack == "v1":
+        from src.multi_fingerprint import OFFSETS, TOTAL_BITS
+        targets_file, default_prefix = "train_multi_fp.npz", "multi_model"
+    else:
+        from src.fp_stack2 import OFFSETS, TOTAL_BITS
+        targets_file, default_prefix = "train_fp2.npz", "fp2_model"
+    if args.prefix is None:
+        args.prefix = str(P / default_prefix)
+    globals()["OFFSETS"], globals()["TOTAL_BITS"] = OFFSETS, TOTAL_BITS
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}", flush=True)
 
     z = np.load(P / "fp_train_data.npz", allow_pickle=True)
     target_idx, is_val = z["target_idx"], z["is_val"]
-    mf = np.load(P / "train_multi_fp.npz", allow_pickle=True)
+    mf = np.load(P / targets_file, allow_pickle=True)
     packed, ok = mf["packed"], mf["ok"]
     pk = np.load(P / "peak_train_data.npz")
     d = {k: pk[k] for k in ["mz", "inten", "mask", "precursor", "mode"]}
@@ -120,7 +135,39 @@ def main():
     loss_fn = nn.BCEWithLogitsLoss()
     rng = np.random.default_rng(0)
 
-    for epoch in range(args.epochs):
+    start_epoch = 0
+    if args.resume:
+        done = sorted(Path(args.prefix).parent.glob(Path(args.prefix).name + "_e*.pt"),
+                      key=lambda f: int(f.stem.rsplit("_e", 1)[1]))
+        if done:
+            last = done[-1]
+            n = int(last.stem.rsplit("_e", 1)[1])
+            ck = torch.load(last, map_location=device, weights_only=False)
+            model.load_state_dict(ck["state_dict"])
+            start_epoch = n
+            if "optimizer" in ck:
+                opt.load_state_dict(ck["optimizer"])
+                sched.load_state_dict(ck["scheduler"])
+                print(f"resuming from {last.name} with optimizer and schedule restored",
+                      flush=True)
+            else:
+                # Checkpoints written before --resume existed hold weights only.
+                # The optimizer moments are gone, but stepping the schedule to
+                # where it was keeps the learning rate on its intended curve,
+                # which matters more over the few epochs that remain.
+                for _ in range(n * steps_per_epoch):
+                    sched.step()
+                print(f"resuming from {last.name} (weights only; schedule fast-forwarded "
+                      f"to step {n * steps_per_epoch}, optimizer state lost)", flush=True)
+            # consume the permutations the finished epochs used, so the data
+            # order continues as it would have rather than repeating
+            for _ in range(n):
+                rng.permutation(train_idx)
+            print(f"continuing at epoch {n + 1} of {args.epochs}", flush=True)
+        else:
+            print("--resume given but no checkpoint found; starting from scratch", flush=True)
+
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         perm = rng.permutation(train_idx)
         t0, running = time.time(), 0.0
@@ -147,7 +194,10 @@ def main():
               f"({time.time()-t0:.0f}s)", flush=True)
         path = f"{args.prefix}_e{epoch+1}.pt"
         torch.save({"state_dict": model.state_dict(), "config": cfg, "val_loss": val_loss,
-                    "val_tanimoto_blocks": tans, "epoch": epoch + 1}, path)
+                    "val_tanimoto_blocks": tans, "epoch": epoch + 1,
+                    # for --resume: without these a restart keeps the weights but
+                    # loses the optimizer moments
+                    "optimizer": opt.state_dict(), "scheduler": sched.state_dict()}, path)
         print(f"  saved {path}", flush=True)
 
 

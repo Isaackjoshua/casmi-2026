@@ -61,7 +61,7 @@ casmi-2026/
 
 ## Current status
 
-**Public leaderboard: 0.240** (MRR@25), from 0.063 at the first submission.
+**Public leaderboard: 0.245** (MRR@25), from 0.063 at the first submission.
 
 | submission | public | what changed |
 |---|---|---|
@@ -70,7 +70,8 @@ casmi-2026/
 | Phase 3 | 0.230 | learned spectrum→fingerprint model, fused with analog propagation |
 | Phase 4 | 0.232 | tiered PubChem pool (94M structures, memory-mapped) |
 | Phase 5 | 0.236 | large peak transformer in the ensemble |
-| Phase 5 | **0.240** | its best-Tanimoto checkpoint |
+| Phase 5 | 0.240 | its best-Tanimoto checkpoint |
+| Phase 6 | **0.245** | multi-fingerprint scoring: Morgan r3 + MACCS alongside Morgan r2 |
 
 The last two came from changing the *measurement*, not the search: a paired
 per-molecule test (`scripts/sweep_paired.py`) resolves the ~0.01 MRR effects
@@ -323,6 +324,25 @@ Anything that harness reports as `ns` is genuinely not worth chasing.
 - [ ] Final ensemble + validation
 
 ## Design notes / known limitations
+
+- **Orthogonal fingerprints beat a better fingerprint.** Predicting the same
+  2048-bit Morgan r2 target more accurately is a dead end — eleven
+  checkpoints spanning 62M to 4.6M params sit within 5% of each other, and
+  across them +0.01 Tanimoto buys only +0.0031 MRR. But predicting *other*
+  descriptor families alongside it does help: a transformer trained on
+  Morgan r2 + Morgan r3 + MACCS (3239 bits) was worth +0.005 on the
+  leaderboard (0.240 → 0.245). Scoring is a sum over bits, so independent
+  fingerprints extend the sum; two predictions at Tanimoto 0.3 that make
+  *different* mistakes constrain a candidate more than one at 0.35.
+
+  How they are combined matters more than that they are. Scoring on the new
+  model's 3239 bits alone **loses**, and so does naively summing the block
+  log-likelihoods: MACCS is dense (28% of bits set) and by far the
+  best-predicted block (Tanimoto 0.72 against 0.37 for Morgan r2), so its
+  spread swamps the Morgan signal. Each block has to be standardized within
+  the mass window first, with the orthogonal ones down-weighted to ~0.3
+  (`multi_fingerprint.block_weighted_loglik`); the result is flat over
+  weights 0.2–0.45 and significant on two disjoint validation sets.
 
 - **Coverage was not the bottleneck; ranking is.** Phase 4 was built on the
   estimate that only ~46% of test molecules had their answer in the

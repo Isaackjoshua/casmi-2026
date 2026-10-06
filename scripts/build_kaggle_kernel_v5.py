@@ -41,6 +41,7 @@ SOURCE_FILES = [
     "src/fingerprint_model.py",
     "src/peak_transformer.py",
     "src/pipeline_v3.py",
+    "src/multi_fingerprint.py",
     "src/large_pool.py",
     "src/pipeline_v4.py",
     "src/submission.py",
@@ -97,6 +98,7 @@ def build_notebook():
         ),
         _code_cell(
             "import math\n"
+            "import time\n"
             "import numpy as np\n"
             "import pandas as pd\n"
             "import pyarrow.parquet as pq\n"
@@ -136,7 +138,11 @@ def build_notebook():
             f'# window, the mass window, COARSE_TOP_K and FINE_TOP_N are all at or\n'
             f'# indistinguishable from their optimum.\n'
             f'MODEL_PATHS = ["/kaggle/input/datasets/{MODEL_DATASET}/fp_model.pt", '
-            f'"/kaggle/input/datasets/{MODEL_DATASET}/peak_model_l_tan.pt"]\n\n'
+            f'"/kaggle/input/datasets/{MODEL_DATASET}/peak_model_l_tan.pt"]\n'
+            f'# Loaded separately, never inside the ensemble -- it has 3239 output\n'
+            f'# bits, not 2048, so averaging it with the others is not meaningful.\n'
+            f'MULTI_MODEL_PATH = "/kaggle/input/datasets/{MODEL_DATASET}/multi_model_e8.pt"\n'
+            f'MULTI_BLOCK_WEIGHT = 0.3\n\n'
             'train = pd.read_parquet(f"{DATA_DIR}/train.parquet")\n'
             'test = pd.read_parquet(f"{DATA_DIR}/test.parquet")\n\n'
             'lib_sources = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2", '
@@ -162,6 +168,24 @@ def build_notebook():
             'device = torch.device("cuda" if torch.cuda.is_available() else "cpu")\n'
             "model = load_fingerprint_model(MODEL_PATHS, device)\n"
             'print(f"ensemble of {len(MODEL_PATHS)} models loaded on {device}", flush=True)\n\n'
+            "# Morgan r3 and MACCS for every pool candidate, plus the model that\n"
+            "# predicts them. Both are optional: any failure here leaves multi=None,\n"
+            "# which is exactly the Morgan-r2-only scoring that produced 0.240.\n"
+            "multi = None\n"
+            "try:\n"
+            "    import multiprocessing as _mp\n"
+            "    _w = max(1, _mp.cpu_count())\n"
+            "    _t = time.time()\n"
+            "    pool_multi, _ok = packed_many(list(pool.normalized_smiles), workers=_w)\n"
+            '    print(f"pool multi-fingerprints: {_ok.sum():,}/{len(_ok):,} in '
+            '{time.time()-_t:.0f}s on {_w} workers", flush=True)\n'
+            "    multi_model = load_fingerprint_model(MULTI_MODEL_PATH, device)\n"
+            "    multi = (pool_multi, multi_model, MULTI_BLOCK_WEIGHT)\n"
+            '    print(f"multi-fingerprint scoring on at block weight {MULTI_BLOCK_WEIGHT}", '
+            "flush=True)\n"
+            "except Exception as e:\n"
+            "    print(f'WARNING: multi-fingerprint scoring unavailable "
+            "({type(e).__name__}: {e}); Morgan r2 only', flush=True)\n\n"
             "# A valid submission exists before any of the expensive work starts, so\n"
             "# nothing later can leave the run with no file at all. Version 1 of this\n"
             "# notebook threw on the hidden-test rerun, and a single molecule with an\n"
@@ -172,7 +196,7 @@ def build_notebook():
             'print(f"placeholder submission written; now computing the real one", flush=True)\n\n'
             "try:\n"
             "    predictions = predict_test_set(test, library, pool, large, model, device,\n"
-            "                                   fallback=FALLBACK)\n"
+            "                                   fallback=FALLBACK, multi=multi)\n"
             "except Exception as e:\n"
             "    print(f'ERROR: predict_test_set failed entirely ({type(e).__name__}: {e}); '\n"
             "          f'keeping library-frequency guesses for every molecule')\n"

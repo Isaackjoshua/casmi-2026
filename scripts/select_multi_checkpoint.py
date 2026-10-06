@@ -153,15 +153,31 @@ def main():
     ap.add_argument("--epochs", default="1,2,3,4,5,6,7,8")
     ap.add_argument("--weights", default="0.0,0.25,0.5,1.0",
                     help="weight on the standardized morgan3+maccs blocks; 0 recovers shipped")
+    ap.add_argument("--sources", default="massbank,mona",
+                    help="which libraries to draw the held-out molecules from. The "
+                         "massbank/mona pool is only 2095 structures, so asking for more "
+                         "than that silently returns all of them and --seed stops doing "
+                         "anything -- which turned one measurement into a fake pair. "
+                         "spectraverse gives 9,537 structures disjoint from massbank/mona, "
+                         "so it is a genuinely independent confirmation set.")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train = load_train()
     lib_keys = set(train[train["ingest_lib"].isin(FIVE)]["inchikey14"])
-    novel = train[train["ingest_lib"].isin(["massbank", "mona"])]
+    srcs = [x.strip() for x in args.sources.split(",")]
+    novel = train[train["ingest_lib"].isin(srcs)]
     novel = novel[~novel["inchikey14"].isin(lib_keys)]
+    if args.sources != "massbank,mona":
+        # keep confirmation sets disjoint from the massbank/mona one
+        used = set(train[train["ingest_lib"].isin(["massbank", "mona"])]["inchikey14"]) - lib_keys
+        novel = novel[~novel["inchikey14"].isin(used)]
+    avail = novel["inchikey14"].nunique()
+    if args.n > avail:
+        print(f"NOTE: asked for {args.n} but only {avail} are available from "
+              f"{args.sources}; --seed has no effect when the whole set is taken", flush=True)
     keys = set(novel["inchikey14"].drop_duplicates().sample(
-        n=min(args.n, novel["inchikey14"].nunique()), random_state=args.seed))
+        n=min(args.n, avail), random_state=args.seed))
     sample = novel[novel["inchikey14"].isin(keys)]
     scored = set(sample["inchikey14"])
     lib = build_library(train[train["ingest_lib"].isin(ALL_LIBS)

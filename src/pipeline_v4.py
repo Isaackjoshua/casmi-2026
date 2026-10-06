@@ -137,7 +137,8 @@ LARGE_MASS_WINDOW_DA = MASS_WINDOW_DA
 
 def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool | None,
                      model, device, alpha=ALPHA, large_alpha=LARGE_ALPHA,
-                     large_window=LARGE_MASS_WINDOW_DA, tier1_cap=TIER1_CAP) -> list:
+                     large_window=LARGE_MASS_WINDOW_DA, tier1_cap=TIER1_CAP,
+                     multi=None) -> list:
     """Curated guesses first, then PubChem to fill the rest of the 25.
 
     The tier-2 blend weight and mass window are settable independently of
@@ -161,7 +162,7 @@ def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool |
     # Capping tier 1 only pays for itself if tier 2 can use the freed slots;
     # with no large pool, giving up 20 of 25 guesses would be a pure loss.
     cap = min(tier1_cap, N_GUESSES) if large is not None else N_GUESSES
-    for smi in predict_curated(rows, lib, pool, model, device, alpha=alpha):
+    for smi in predict_curated(rows, lib, pool, model, device, alpha=alpha, multi=multi):
         key = to_inchikey14(smi) or smi
         if key in seen:
             continue
@@ -179,7 +180,7 @@ def predict_molecule(rows, lib: Library, pool: CandidatePool, large: LargePool |
 
 
 def predict_test_set(test_df, lib, pool, large, model, device, alpha=ALPHA, verbose=True,
-                     fallback=None):
+                     fallback=None, multi=None):
     """molecule_id -> guesses, one prediction per molecule, never raising.
 
     Every molecule ends up with at least one guess: an empty result would
@@ -190,11 +191,13 @@ def predict_test_set(test_df, lib, pool, large, model, device, alpha=ALPHA, verb
     groups = list(test_df.groupby("molecule_id"))
     for i, (mid, rows) in enumerate(groups):
         try:
-            out[mid] = predict_molecule(rows.to_dict("records"), lib, pool, large, model, device, alpha)
+            out[mid] = predict_molecule(rows.to_dict("records"), lib, pool, large, model, device, alpha,
+                                        multi=multi)
         except Exception as exc:  # a single bad molecule must not lose the submission
             print(f"  molecule {mid} failed ({type(exc).__name__}: {exc}); falling back to curated-only")
             try:
-                out[mid] = predict_curated(rows.to_dict("records"), lib, pool, model, device, alpha=alpha)
+                out[mid] = predict_curated(rows.to_dict("records"), lib, pool, model, device, alpha=alpha,
+                                           multi=multi)
             except Exception:
                 out[mid] = []
         if not out[mid] and fallback:

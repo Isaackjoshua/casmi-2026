@@ -19,6 +19,7 @@ from .baseline import FINE_TOP_N, N_GUESSES, Library, _global_fallback_candidate
 from .candidates import FP_BITS
 from .fingerprint_model import FingerprintEnsemble, FingerprintMLP, build_feature_matrix, fingerprint_loglik_scores, predict_probs
 from .metric import to_inchikey14
+from .multi_fingerprint import block_weighted_loglik
 from .peak_transformer import PeakTransformer, predict_probs_peaks
 from .pipeline_v2 import MASS_WINDOW_WIDEN_CAP, MASS_WINDOW_WIDEN_FACTOR, merge_spectra
 from .propagation import MASS_WINDOW_DA, PROPAGATION_EXPONENT, CandidatePool, mass_window, neutral_mass, propagation_scores
@@ -95,6 +96,7 @@ def predict_molecule(
     mass_window_da: float = MASS_WINDOW_DA,
     exponent: float = PROPAGATION_EXPONENT,
     alpha: float = ALPHA,
+    multi: tuple | None = None,
 ) -> list[str]:
     best_score: dict[str, float] = {}
     best_smiles: dict[str, str] = {}
@@ -135,7 +137,16 @@ def predict_molecule(
             # Predict per raw spectrum (the models trained on single spectra,
             # not merged ones) and average the bit probabilities.
             probs = predict_bit_probs(model, group, device).mean(axis=0)
-            loglik = fingerprint_loglik_scores(probs, candidate_bits(pool, lo, hi))
+            if multi is None:
+                loglik = fingerprint_loglik_scores(probs, candidate_bits(pool, lo, hi))
+            else:
+                # Morgan r2 from `model`, the orthogonal blocks from the
+                # multi-fingerprint model. See
+                # multi_fingerprint.block_weighted_loglik for why the blocks
+                # are standardized before being combined.
+                mpacked, mmodel, mweight = multi
+                mprobs = predict_bit_probs(mmodel, group, device).mean(axis=0)
+                loglik = block_weighted_loglik(probs, mprobs, mpacked[lo:hi], mweight)
             # Every candidate in the window is mass-consistent, so each has
             # real (if weak) evidence -- keep them all above zero.
             fused += (1 - alpha) * (MODEL_FLOOR + (1 - MODEL_FLOOR) * _normalize(loglik, 1.0))
@@ -172,13 +183,14 @@ def predict_test_set(
     mass_window_da: float = MASS_WINDOW_DA,
     exponent: float = PROPAGATION_EXPONENT,
     alpha: float = ALPHA,
+    multi: tuple | None = None,
 ) -> dict[str, list[str]]:
     predictions = {}
     n_fallback = 0
     n_error = 0
     for mid, group in test_df.groupby("molecule_id"):
         try:
-            guesses = predict_molecule(group.to_dict("records"), lib, pool, model, device, mass_window_da, exponent, alpha)
+            guesses = predict_molecule(group.to_dict("records"), lib, pool, model, device, mass_window_da, exponent, alpha, multi)
         except Exception as e:
             n_error += 1
             print(f"WARNING: prediction failed for {mid} ({type(e).__name__}: {e}); using frequency fallback")

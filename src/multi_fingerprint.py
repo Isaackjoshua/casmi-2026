@@ -34,6 +34,8 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import MACCSkeys, rdFingerprintGenerator
 
+from .fingerprint_model import fingerprint_loglik_scores
+
 MORGAN2_BITS = 2048
 MORGAN3_BITS = 1024
 MACCS_BITS = 167
@@ -88,3 +90,61 @@ def unpack(packed: np.ndarray) -> np.ndarray:
     if packed.ndim == 1:
         packed = packed[None, :]
     return np.unpackbits(packed, axis=1)[:, :TOTAL_BITS]
+
+
+def _packed_one(smiles):
+    try:
+        return packed_from_smiles(smiles)
+    except Exception:
+        return None
+
+
+def packed_many(smiles_list, workers: int = 4, chunk: int = 2000):
+    """(n, PACKED_BYTES) uint8 for a list of SMILES, in the order given.
+
+    The Kaggle kernel builds its candidate pool at runtime, so it has to
+    fingerprint the pool there too. Mirrors candidates.fingerprint_many:
+    multiprocessing, and a row of zeros for anything unparseable (a
+    candidate with no fingerprint simply contributes nothing to its own
+    score rather than failing the run).
+    """
+    from multiprocessing import Pool
+
+    smiles_list = list(smiles_list)
+    out = np.zeros((len(smiles_list), PACKED_BYTES), dtype=np.uint8)
+    ok = np.zeros(len(smiles_list), dtype=bool)
+    with Pool(workers) as pool:
+        for i, packed in enumerate(pool.imap(_packed_one, smiles_list, chunksize=chunk)):
+            if packed is not None:
+                out[i] = np.frombuffer(packed, dtype=np.uint8)
+                ok[i] = True
+    return out, ok
+
+
+def block_weighted_loglik(morgan2_probs, multi_probs, cand_packed, weight: float):
+    """Candidate scores combining a Morgan-r2 prediction with the orthogonal
+    blocks of a multi-fingerprint prediction.
+
+    Raw log-likelihoods are NOT summed: MACCS is dense (28% of bits set) and
+    by far the best-predicted block, so its spread swamps Morgan r2 and the
+    combination scores worse than Morgan r2 alone. Each block is standardized
+    within the window first, so `weight` decides the balance rather than the
+    scale. weight = 0 reproduces Morgan-r2-only scoring exactly.
+
+    Measured against the Morgan-r2 baseline, paired per molecule:
+      massbank/mona n=2095   +0.0042 +/- 0.0030 at weight 0.3
+      spectraverse  n=2500   +0.0109 +/- 0.0067 at weight 0.3  (disjoint set)
+    and flat over weight 0.2-0.45 on both.
+    """
+    bits = unpack(np.asarray(cand_packed))
+    lo2, hi2 = OFFSETS["morgan2"]
+    l_m2 = fingerprint_loglik_scores(morgan2_probs, bits[:, lo2:hi2])
+    if weight <= 0:
+        return l_m2
+    l_rest = fingerprint_loglik_scores(np.asarray(multi_probs)[hi2:], bits[:, hi2:])
+
+    def z(x):
+        sd = x.std()
+        return (x - x.mean()) / sd if sd > 0 else np.zeros_like(x)
+
+    return z(l_m2) + weight * z(l_rest)

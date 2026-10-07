@@ -36,7 +36,6 @@ from src.candidates import FP_BITS
 from src.data import load_train
 from src.fingerprint_model import fingerprint_loglik_scores
 from src.metric import to_inchikey14
-from src.multi_fingerprint import OFFSETS, TOTAL_BITS
 from src.pipeline_v2 import MASS_WINDOW_WIDEN_CAP, MASS_WINDOW_WIDEN_FACTOR, merge_spectra
 from src.pipeline_v3 import (ALPHA, MODEL_FLOOR, _normalize, candidate_bits,
                             load_fingerprint_model, predict_bit_probs)
@@ -48,7 +47,12 @@ P = ROOT / "data/processed"
 FIVE = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2"]
 ALL_LIBS = FIVE + ["massbank", "mona", "spectraverse", "msdial", "drug_plus", "masaryk"]
 SHIPPED = ["fp_model.pt", "peak_model_l_tan.pt"]
-M2_LO, M2_HI = OFFSETS["morgan2"]
+
+STACKS = {
+    "v1": ("src.multi_fingerprint", "pool_multi_fp.npy", "multi_model"),
+    "v2": ("src.fp_stack2", "pool_fp2.npy", "fp2_model"),
+}
+STACK = None  # the imported stack module, set in main()
 
 
 def _z(x):
@@ -58,7 +62,7 @@ def _z(x):
 
 def predict_molecule_scored(rows, lib, pool, mpacked, device, alpha,
                             base_model=None, multi_model=None, mode="shipped",
-                            block_weight=None, block="both"):
+                            block_weight=None, block="all", rule="single"):
     """pipeline_v3.predict_molecule, with the model term swapped per `mode`.
 
     mode "shipped" reproduces the deployed scorer exactly (Morgan r2 only,
@@ -100,28 +104,43 @@ def predict_molecule_scored(rows, lib, pool, mpacked, device, alpha,
                 probs = predict_bit_probs(base_model, group, device).mean(axis=0)
                 loglik = fingerprint_loglik_scores(probs, candidate_bits(pool, lo, hi))
             else:
-                mbits = np.unpackbits(mpacked[lo:hi], axis=1)[:, :TOTAL_BITS]
+                mbits = STACK.unpack(np.asarray(mpacked[lo:hi]))
                 pm = predict_bit_probs(multi_model, group, device).mean(axis=0)
                 if mode == "multi":
                     loglik = fingerprint_loglik_scores(pm, mbits)
-                else:  # hybrid, optionally with per-block standardization
+                else:
                     pb = predict_bit_probs(base_model, group, device).mean(axis=0)
-                    l_m2 = fingerprint_loglik_scores(pb, mbits[:, M2_LO:M2_HI])
-                    if block == "both":
-                        sl = slice(M2_HI, TOTAL_BITS)
-                    else:
-                        sl = slice(*OFFSETS[block])
-                    l_rest = fingerprint_loglik_scores(pm[sl], mbits[:, sl])
+                    m2_lo, m2_hi = STACK.OFFSETS["morgan2"]
+                    l_m2 = fingerprint_loglik_scores(pb, mbits[:, m2_lo:m2_hi])
+                    fams = ([n for n in STACK.OFFSETS if n != "morgan2"]
+                            if block == "all" else [x for x in block.split(",")])
                     if block_weight is None:
-                        loglik = l_m2 + l_rest
-                    else:
-                        # Summing raw log-likelihoods lets whichever block has
-                        # the larger spread dominate, and MACCS is both dense
-                        # (28% of bits on) and the best-predicted block, so it
-                        # can swamp the Morgan-r2 signal two submissions were
-                        # built on. Standardizing each block within the window
-                        # makes the weight, not the scale, decide.
+                        # raw sum, for the record: whichever family has the
+                        # widest spread dominates, and that loses
+                        loglik = l_m2 + sum(
+                            fingerprint_loglik_scores(pm[slice(*STACK.OFFSETS[f])],
+                                                      mbits[:, slice(*STACK.OFFSETS[f])])
+                            for f in fams)
+                    elif rule == "single":
+                        # the DEPLOYED rule: the orthogonal families pooled into
+                        # one log-likelihood, then standardized as a single term.
+                        # Kept selectable so this script can still reproduce the
+                        # scorer that is actually shipped.
+                        parts = [mbits[:, slice(*STACK.OFFSETS[f])] for f in fams]
+                        probs = [pm[slice(*STACK.OFFSETS[f])] for f in fams]
+                        l_rest = sum(fingerprint_loglik_scores(pr, bi)
+                                     for pr, bi in zip(probs, parts))
                         loglik = _z(l_m2) + block_weight * _z(l_rest)
+                    else:
+                        # one standardized term per family, weight split between
+                        # them, so a family's influence does not depend on how
+                        # many bits it happens to have. Worth testing against
+                        # "single" once there are six families rather than two.
+                        loglik = _z(l_m2)
+                        for f in fams:
+                            sl = slice(*STACK.OFFSETS[f])
+                            loglik = loglik + (block_weight / len(fams)) * _z(
+                                fingerprint_loglik_scores(pm[sl], mbits[:, sl]))
             fused += (1 - alpha) * (MODEL_FLOOR + (1 - MODEL_FLOOR) * _normalize(loglik, 1.0))
 
         top = np.argsort(fused)[::-1][:FINE_TOP_N]
@@ -157,9 +176,14 @@ def main():
     ap.add_argument("--epochs", default="1,2,3,4,5,6,7,8")
     ap.add_argument("--weights", default="0.0,0.25,0.5,1.0",
                     help="weight on the standardized morgan3+maccs blocks; 0 recovers shipped")
-    ap.add_argument("--block", default="both", choices=["both", "morgan3", "maccs"],
-                    help="which orthogonal block to score with, to see which one earned "
-                         "the +0.005 -- that decides what is worth adding next")
+    ap.add_argument("--stack", default="v1", choices=["v1", "v2"])
+    ap.add_argument("--rule", default="single", choices=["single", "perfamily"],
+                    help='"single" pools the orthogonal families into one '
+                         'standardized term, which is what is deployed; "perfamily" '
+                         'standardizes each and splits the weight')
+    ap.add_argument("--block", default="all",
+                    help='"all", or a comma-separated list of family names to ablate '
+                         '(e.g. "morgan3" or "atompair,torsion")')
     ap.add_argument("--sources", default="massbank,mona",
                     help="which libraries to draw the held-out molecules from. The "
                          "massbank/mona pool is only 2095 structures, so asking for more "
@@ -168,6 +192,13 @@ def main():
                          "spectraverse gives 9,537 structures disjoint from massbank/mona, "
                          "so it is a genuinely independent confirmation set.")
     args = ap.parse_args()
+
+    global STACK
+    import importlib
+    mod_name, pool_file, ckpt_prefix = STACKS[args.stack]
+    STACK = importlib.import_module(mod_name)
+    print(f"stack {args.stack}: {STACK.TOTAL_BITS} bits, families "
+          f"{list(STACK.OFFSETS)}", flush=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train = load_train()
@@ -190,7 +221,7 @@ def main():
     lib = build_library(train[train["ingest_lib"].isin(ALL_LIBS)
                               & ~train["inchikey14"].isin(scored)])
     pool = load_candidate_pool(P / "candidate_fingerprints.parquet")
-    mpacked = np.load(P / "pool_multi_fp.npy")
+    mpacked = np.load(P / pool_file)
     groups = list(sample.groupby("inchikey14"))
     print(f"{len(groups)} molecules; pool multi-fp {mpacked.shape}; "
           f"orthogonal block = {args.block}\n", flush=True)
@@ -206,7 +237,7 @@ def main():
 
     print(f"{'checkpoint':22s} {'mode':8s} {'MRR':>7} {'paired diff':>12} {'95% CI':>9}  verdict")
     for e in [int(x) for x in args.epochs.split(",")]:
-        path = P / f"multi_model_e{e}.pt"
+        path = P / f"{ckpt_prefix}_e{e}.pt"
         if not path.exists():
             continue
         mm = load_fingerprint_model(str(path), device)
@@ -218,13 +249,14 @@ def main():
             res = {k: reciprocal_rank(
                 predict_molecule_scored(g.to_dict("records"), lib, pool, mpacked, device, ALPHA,
                                         base_model=base_model, multi_model=mm, mode=mode,
-                                        block_weight=bw, block=args.block), k)
+                                        block_weight=bw, block=args.block,
+                                        rule=args.rule), k)
                 for k, g in groups}
             d = np.array([res[k] - base[k] for k, _ in groups])
             ci = 1.96 * d.std(ddof=1) / np.sqrt(len(d))
             sig = abs(d.mean()) > ci
             verdict = ("BETTER" if d.mean() > 0 else "worse") if sig else "ns"
-            print(f"{'multi_model_e'+str(e):22s} {label:8s} "
+            print(f"{ckpt_prefix+'_e'+str(e):22s} {label:8s} "
                   f"{np.mean(list(res.values())):7.4f} {d.mean():+12.4f} {ci:9.4f}  {verdict}"
                   f"  ({time.time()-t0:.0f}s)", flush=True)
         del mm

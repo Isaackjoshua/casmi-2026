@@ -1,0 +1,330 @@
+[{"stream_name":"stderr","time":6.911164513,"data":"/usr/local/lib/python3.12/dist-packages/nbformat/__init__.py:96: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.\n"}
+,{"stream_name":"stderr","time":6.911222038,"data":"  validate(nb)\n"}
+,{"stream_name":"stderr","time":7.88211435,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.882146914,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.882151664,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.882155816,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":8.608478518,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":8.608514913,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":8.608520443,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":8.608524808,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":102.605506083,"data":"anchor library: 519426 unique (structure, adduct) spectra\n"}
+,{"stream_name":"stderr","time":123.139826842,"data":"[06:40:36] Unusual charge on atom 42 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":123.139917881,"data":"\n"}
+,{"stream_name":"stderr","time":123.140148353,"data":"[06:40:36] Unusual charge on atom 42 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":128.998823376,"data":"[06:40:41] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":128.998871041,"data":"\n"}
+,{"stream_name":"stderr","time":128.999541128,"data":"[06:40:41] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":130.070430785,"data":"[06:40:42] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":130.07046961,"data":"\n"}
+,{"stream_name":"stderr","time":130.070475395,"data":"[06:40:42] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":130.073328361,"data":"[06:40:42] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":130.073364926,"data":"\n"}
+,{"stream_name":"stderr","time":130.073685578,"data":"[06:40:42] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":130.075693951,"data":"[06:40:42] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":130.075715535,"data":"\n"}
+,{"stream_name":"stderr","time":130.075947775,"data":"[06:40:42] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":142.819439486,"data":"[06:40:55] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":142.819481127,"data":"\n"}
+,{"stream_name":"stderr","time":142.819486978,"data":"[06:40:55] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":148.881192779,"data":"[06:41:01] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":148.881267228,"data":"\n"}
+,{"stream_name":"stderr","time":148.881307734,"data":"[06:41:01] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":148.885647274,"data":"[06:41:01] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":148.885682034,"data":"\n"}
+,{"stream_name":"stderr","time":148.886247476,"data":"[06:41:01] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":160.302752589,"data":"[06:41:13] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":160.30283151,"data":"\n"}
+,{"stream_name":"stderr","time":160.302838033,"data":"[06:41:13] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":179.114309271,"data":"[06:41:32] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":179.114558963,"data":"\n"}
+,{"stream_name":"stderr","time":179.115693695,"data":"[06:41:32] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":181.50237765,"data":"[06:41:34] Unusual charge on atom 37 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":181.502437564,"data":"\n"}
+,{"stream_name":"stderr","time":181.502567778,"data":"[06:41:34] Unusual charge on atom 37 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":194.767501442,"data":"[06:41:47] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":194.76756671,"data":"\n"}
+,{"stream_name":"stderr","time":194.767573031,"data":"[06:41:47] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stdout","time":251.391325316,"data":"curated pool: 729391 structures\n"}
+,{"stream_name":"stdout","time":253.014036069,"data":"PubChem pool: 94,043,986 structures (memory-mapped)\n"}
+,{"stream_name":"stdout","time":256.514334873,"data":"ensemble of 2 models loaded on cpu\n"}
+,{"stream_name":"stderr","time":257.213688715,"data":"[06:42:50] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":257.213759017,"data":"\n"}
+,{"stream_name":"stderr","time":257.213774267,"data":"[06:42:50] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":279.523546001,"data":"[06:43:12] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":279.523616976,"data":"\n"}
+,{"stream_name":"stderr","time":279.525490767,"data":"[06:43:12] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":282.691721251,"data":"[06:43:15] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":282.691765332,"data":"\n"}
+,{"stream_name":"stderr","time":282.691771928,"data":"[06:43:15] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":282.693418403,"data":"[06:43:15] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":282.693473414,"data":"\n"}
+,{"stream_name":"stderr","time":282.693480066,"data":"[06:43:15] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":540.350033699,"data":"[06:47:33] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":540.350110143,"data":"\n"}
+,{"stream_name":"stderr","time":540.350116825,"data":"[06:47:33] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":613.948539255,"data":"[06:48:46] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":613.948604146,"data":"\n"}
+,{"stream_name":"stderr","time":613.948625938,"data":"[06:48:46] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":766.548732153,"data":"[06:51:19] Unusual charge on atom 37 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":766.548781063,"data":"\n"}
+,{"stream_name":"stderr","time":766.548787454,"data":"[06:51:19] Unusual charge on atom 37 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":771.849406678,"data":"[06:51:24] Unusual charge on atom 42 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":771.849675904,"data":"\n"}
+,{"stream_name":"stderr","time":771.849809074,"data":"[06:51:24] Unusual charge on atom 42 number of radical electrons set to zero\n"}
+,{"stream_name":"stderr","time":829.075749779,"data":"[06:52:21] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":829.075804006,"data":"\n"}
+,{"stream_name":"stderr","time":829.07581096,"data":"[06:52:21] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":829.077415532,"data":"[06:52:21] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":829.077442808,"data":"\n"}
+,{"stream_name":"stderr","time":829.08055361,"data":"[06:52:21] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":829.082256164,"data":"[06:52:21] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":829.082304206,"data":"\n"}
+,{"stream_name":"stderr","time":829.082311926,"data":"[06:52:21] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":874.056642235,"data":"[06:53:06] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stderr","time":874.056717442,"data":"\n"}
+,{"stream_name":"stderr","time":874.056725573,"data":"[06:53:06] WARNING: not removing hydrogen atom without neighbors\n"}
+,{"stream_name":"stdout","time":1012.143912548,"data":"pool multi-fingerprints: 729,391/729,391 in 756s on 4 workers\n"}
+,{"stream_name":"stdout","time":1012.966116593,"data":"multi-fingerprint scoring on at block weight 0.3\n"}
+,{"stream_name":"stdout","time":1013.817957334,"data":"Wrote 400 rows to submission.csv\n"}
+,{"stream_name":"stdout","time":1013.817996437,"data":"placeholder submission written; now computing the real one\n"}
+,{"stream_name":"stderr","time":1016.586556131,"data":"[06:55:28] Tautomer enumeration stopped at 605 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1016.586594794,"data":"\n"}
+,{"stream_name":"stderr","time":1016.586600975,"data":"[06:55:28] Tautomer enumeration stopped at 605 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1018.739074283,"data":"[06:55:28] Tautomer enumeration stopped at 155 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1018.739118163,"data":"[06:55:29] Tautomer enumeration stopped at 241 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1018.739123555,"data":"[06:55:29] Tautomer enumeration stopped at 392 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1018.739128322,"data":"\n"}
+,{"stream_name":"stderr","time":1018.739132678,"data":"[06:55:28] Tautomer enumeration stopped at 155 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1018.739137317,"data":"[06:55:29] Tautomer enumeration stopped at 241 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1018.739141669,"data":"[06:55:29] Tautomer enumeration stopped at 392 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.223692989,"data":"[06:55:31] Tautomer enumeration stopped at 470 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.223749584,"data":"[06:55:31] Tautomer enumeration stopped at 381 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.223753767,"data":"[06:55:32] Tautomer enumeration stopped at 538 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.223756425,"data":"\n"}
+,{"stream_name":"stderr","time":1020.223758737,"data":"[06:55:31] Tautomer enumeration stopped at 470 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.223761426,"data":"[06:55:31] Tautomer enumeration stopped at 381 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.223763772,"data":"[06:55:32] Tautomer enumeration stopped at 538 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.455164024,"data":"[06:55:32] Tautomer enumeration stopped at 244 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.455202586,"data":"[06:55:33] Tautomer enumeration stopped at 310 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.455208379,"data":"\n"}
+,{"stream_name":"stderr","time":1020.455212295,"data":"[06:55:32] Tautomer enumeration stopped at 244 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1020.455216024,"data":"[06:55:33] Tautomer enumeration stopped at 310 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1028.178980409,"data":"[06:55:40] Tautomer enumeration stopped at 157 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1028.179055869,"data":"\n"}
+,{"stream_name":"stderr","time":1028.179060908,"data":"[06:55:40] Tautomer enumeration stopped at 157 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1039.98696154,"data":"[06:55:52] Can't kekulize mol.  Unkekulized atoms: 2 3 4\n"}
+,{"stream_name":"stderr","time":1039.987007606,"data":"[06:55:52] Can't kekulize mol.  Unkekulized atoms: 2 3 4\n"}
+,{"stream_name":"stderr","time":1039.98701162,"data":"[06:55:52] Can't kekulize mol.  Unkekulized atoms: 2 3 4\n"}
+,{"stream_name":"stderr","time":1039.987014877,"data":"\n"}
+,{"stream_name":"stderr","time":1039.987018699,"data":"[06:55:52] Can't kekulize mol.  Unkekulized atoms: 2 3 4\n"}
+,{"stream_name":"stderr","time":1039.98702254,"data":"[06:55:52] Can't kekulize mol.  Unkekulized atoms: 2 3 4\n"}
+,{"stream_name":"stderr","time":1039.987026594,"data":"[06:55:52] Can't kekulize mol.  Unkekulized atoms: 2 3 4\n"}
+,{"stream_name":"stderr","time":1041.811303685,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811337788,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811343029,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811346856,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811350868,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811355022,"data":"\n"}
+,{"stream_name":"stderr","time":1041.811359146,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811363307,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811367214,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.81137084,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1041.811374507,"data":"[06:55:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1044.736443929,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736473093,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.736478787,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736483205,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.73648768,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.73649241,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.736496777,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736501322,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.736506112,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736510642,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.736514898,"data":"\n"}
+,{"stream_name":"stderr","time":1044.736519705,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736524442,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.736527585,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736530705,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.736533782,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736536811,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.73653978,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736542652,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1044.73654543,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 2 5 6\n"}
+,{"stream_name":"stderr","time":1044.736548335,"data":"[06:55:57] Can't kekulize mol.  Unkekulized atoms: 1 2 5\n"}
+,{"stream_name":"stderr","time":1049.122351179,"data":"[06:56:01] Can't kekulize mol.  Unkekulized atoms: 8 12\n"}
+,{"stream_name":"stderr","time":1049.122397248,"data":"\n"}
+,{"stream_name":"stderr","time":1049.122404776,"data":"[06:56:01] Can't kekulize mol.  Unkekulized atoms: 8 12\n"}
+,{"stream_name":"stderr","time":1052.012999942,"data":"[06:56:04] Can't kekulize mol.  Unkekulized atoms: 3 11\n"}
+,{"stream_name":"stderr","time":1052.013036264,"data":"[06:56:04] Can't kekulize mol.  Unkekulized atoms: 3 11\n"}
+,{"stream_name":"stderr","time":1052.013042543,"data":"\n"}
+,{"stream_name":"stderr","time":1052.013047282,"data":"[06:56:04] Can't kekulize mol.  Unkekulized atoms: 3 11\n"}
+,{"stream_name":"stderr","time":1052.013052622,"data":"[06:56:04] Can't kekulize mol.  Unkekulized atoms: 3 11\n"}
+,{"stream_name":"stdout","time":1068.412761093,"data":"  50/400 molecules\n"}
+,{"stream_name":"stderr","time":1068.602038319,"data":"[06:56:21] Tautomer enumeration stopped at 278 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1068.60207635,"data":"\n"}
+,{"stream_name":"stderr","time":1068.60208262,"data":"[06:56:21] Tautomer enumeration stopped at 278 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1072.231087009,"data":"[06:56:24] Tautomer enumeration stopped at 181 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1072.231183468,"data":"\n"}
+,{"stream_name":"stderr","time":1072.231188431,"data":"[06:56:24] Tautomer enumeration stopped at 181 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1084.161753429,"data":"[06:56:36] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1084.161793886,"data":"\n"}
+,{"stream_name":"stderr","time":1084.161800369,"data":"[06:56:36] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1100.033568228,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 11\n"}
+,{"stream_name":"stderr","time":1100.033611799,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 13 17\n"}
+,{"stream_name":"stderr","time":1100.033618435,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 13 17\n"}
+,{"stream_name":"stderr","time":1100.033623635,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033628582,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033633545,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033638589,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033643237,"data":"\n"}
+,{"stream_name":"stderr","time":1100.033647999,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 11\n"}
+,{"stream_name":"stderr","time":1100.033652806,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 13 17\n"}
+,{"stream_name":"stderr","time":1100.033657821,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 13 17\n"}
+,{"stream_name":"stderr","time":1100.033662489,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033667036,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033672052,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1100.033677189,"data":"[06:56:52] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stdout","time":1107.067360183,"data":"  100/400 molecules\n"}
+,{"stream_name":"stdout","time":1138.220027232,"data":"  150/400 molecules\n"}
+,{"stream_name":"stderr","time":1155.755144883,"data":"[06:57:48] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1155.755191838,"data":"\n"}
+,{"stream_name":"stderr","time":1155.755198345,"data":"[06:57:48] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1174.197935753,"data":"[06:58:06] Can't kekulize mol.  Unkekulized atoms: 3 18\n"}
+,{"stream_name":"stderr","time":1174.19796956,"data":"\n"}
+,{"stream_name":"stderr","time":1174.197974734,"data":"[06:58:06] Can't kekulize mol.  Unkekulized atoms: 3 18\n"}
+,{"stream_name":"stderr","time":1175.863025583,"data":"[06:58:08] Can't kekulize mol.  Unkekulized atoms: 5 22\n"}
+,{"stream_name":"stderr","time":1175.863064088,"data":"[06:58:08] Can't kekulize mol.  Unkekulized atoms: 5 22\n"}
+,{"stream_name":"stderr","time":1175.863069501,"data":"\n"}
+,{"stream_name":"stderr","time":1175.863074057,"data":"[06:58:08] Can't kekulize mol.  Unkekulized atoms: 5 22\n"}
+,{"stream_name":"stderr","time":1175.863078697,"data":"[06:58:08] Can't kekulize mol.  Unkekulized atoms: 5 22\n"}
+,{"stream_name":"stdout","time":1177.604780402,"data":"  200/400 molecules\n"}
+,{"stream_name":"stderr","time":1178.691112506,"data":"[06:58:11] Tautomer enumeration stopped at 163 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1178.691175074,"data":"\n"}
+,{"stream_name":"stderr","time":1178.691181366,"data":"[06:58:11] Tautomer enumeration stopped at 163 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1200.703505895,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703546056,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703551032,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703554883,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703558657,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703562337,"data":"\n"}
+,{"stream_name":"stderr","time":1200.703565835,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703569716,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703573558,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703577129,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1200.703580703,"data":"[06:58:33] Can't kekulize mol.  Unkekulized atoms: 14 18\n"}
+,{"stream_name":"stderr","time":1205.742475922,"data":"[06:58:38] Can't kekulize mol.  Unkekulized atoms: 3 20\n"}
+,{"stream_name":"stderr","time":1205.742516579,"data":"\n"}
+,{"stream_name":"stderr","time":1205.742522623,"data":"[06:58:38] Can't kekulize mol.  Unkekulized atoms: 3 20\n"}
+,{"stream_name":"stderr","time":1214.684242334,"data":"[06:58:47] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1214.68429894,"data":"[06:58:47] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1214.684307258,"data":"\n"}
+,{"stream_name":"stderr","time":1214.684312953,"data":"[06:58:47] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1214.684317993,"data":"[06:58:47] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stdout","time":1219.757334756,"data":"  250/400 molecules\n"}
+,{"stream_name":"stderr","time":1238.177512774,"data":"[06:59:10] Tautomer enumeration stopped at 268 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1238.177549743,"data":"\n"}
+,{"stream_name":"stderr","time":1238.177555467,"data":"[06:59:10] Tautomer enumeration stopped at 268 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1238.821809488,"data":"[06:59:11] Tautomer enumeration stopped at 177 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1238.821848842,"data":"\n"}
+,{"stream_name":"stderr","time":1238.821855262,"data":"[06:59:11] Tautomer enumeration stopped at 177 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1239.024263241,"data":"[06:59:11] Tautomer enumeration stopped at 363 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1239.024325519,"data":"\n"}
+,{"stream_name":"stderr","time":1239.024336135,"data":"[06:59:11] Tautomer enumeration stopped at 363 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1241.719618365,"data":"[06:59:14] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1241.71965788,"data":"[06:59:14] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1241.719663753,"data":"[06:59:14] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1241.719669014,"data":"\n"}
+,{"stream_name":"stderr","time":1241.719696522,"data":"[06:59:14] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1241.719700867,"data":"[06:59:14] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1241.719704343,"data":"[06:59:14] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1242.677063032,"data":"[06:59:15] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1242.677105207,"data":"\n"}
+,{"stream_name":"stderr","time":1242.677110206,"data":"[06:59:15] Can't kekulize mol.  Unkekulized atoms: 4 8\n"}
+,{"stream_name":"stderr","time":1256.10329882,"data":"[06:59:28] Tautomer enumeration stopped at 290 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1256.103340641,"data":"\n"}
+,{"stream_name":"stderr","time":1256.103345529,"data":"[06:59:28] Tautomer enumeration stopped at 290 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1256.33020487,"data":"[06:59:28] Tautomer enumeration stopped at 263 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1256.330244112,"data":"[06:59:28] Tautomer enumeration stopped at 270 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1256.330249031,"data":"\n"}
+,{"stream_name":"stderr","time":1256.330252677,"data":"[06:59:28] Tautomer enumeration stopped at 263 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1256.330256644,"data":"[06:59:28] Tautomer enumeration stopped at 270 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1258.074440994,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074493791,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074500603,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074504477,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074508437,"data":"\n"}
+,{"stream_name":"stderr","time":1258.074512185,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074515652,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074519299,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1258.074523727,"data":"[06:59:30] Can't kekulize mol.  Unkekulized atoms: 3 23\n"}
+,{"stream_name":"stderr","time":1262.323006647,"data":"[06:59:34] Tautomer enumeration stopped at 236 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1262.32304937,"data":"\n"}
+,{"stream_name":"stderr","time":1262.323054827,"data":"[06:59:34] Tautomer enumeration stopped at 236 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1263.286830272,"data":"[06:59:35] Tautomer enumeration stopped at 273 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1263.286870284,"data":"\n"}
+,{"stream_name":"stderr","time":1263.28687586,"data":"[06:59:35] Tautomer enumeration stopped at 273 tautomers: max transforms reached\n"}
+,{"stream_name":"stdout","time":1263.288197932,"data":"  300/400 molecules\n"}
+,{"stream_name":"stderr","time":1263.489541522,"data":"[06:59:36] Tautomer enumeration stopped at 486 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1263.489578586,"data":"\n"}
+,{"stream_name":"stderr","time":1263.489583731,"data":"[06:59:36] Tautomer enumeration stopped at 486 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1280.504951458,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 14 15 20\n"}
+,{"stream_name":"stderr","time":1280.505000316,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 14 15 20\n"}
+,{"stream_name":"stderr","time":1280.505005945,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 14 15 20\n"}
+,{"stream_name":"stderr","time":1280.505010135,"data":"\n"}
+,{"stream_name":"stderr","time":1280.505013973,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 14 15 20\n"}
+,{"stream_name":"stderr","time":1280.505019074,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 14 15 20\n"}
+,{"stream_name":"stderr","time":1280.505023043,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 14 15 20\n"}
+,{"stream_name":"stderr","time":1281.31170873,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 11 15\n"}
+,{"stream_name":"stderr","time":1281.311754321,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 11 15\n"}
+,{"stream_name":"stderr","time":1281.311760993,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 11 15\n"}
+,{"stream_name":"stderr","time":1281.311766654,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 5 6 23\n"}
+,{"stream_name":"stderr","time":1281.31177136,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 5 6 23\n"}
+,{"stream_name":"stderr","time":1281.31177609,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1281.31178065,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1281.311790884,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 5 9\n"}
+,{"stream_name":"stderr","time":1281.31179558,"data":"\n"}
+,{"stream_name":"stderr","time":1281.311800133,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 11 15\n"}
+,{"stream_name":"stderr","time":1281.311805941,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 11 15\n"}
+,{"stream_name":"stderr","time":1281.311810654,"data":"[06:59:53] Can't kekulize mol.  Unkekulized atoms: 11 15\n"}
+,{"stream_name":"stderr","time":1281.311815404,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 5 6 23\n"}
+,{"stream_name":"stderr","time":1281.311819613,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 5 6 23\n"}
+,{"stream_name":"stderr","time":1281.311824849,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1281.311829198,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 2 6\n"}
+,{"stream_name":"stderr","time":1281.311833918,"data":"[06:59:54] Can't kekulize mol.  Unkekulized atoms: 5 9\n"}
+,{"stream_name":"stderr","time":1286.941379105,"data":"[06:59:59] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1286.941435851,"data":"[06:59:59] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1286.941441088,"data":"\n"}
+,{"stream_name":"stderr","time":1286.941443702,"data":"[06:59:59] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1286.941446373,"data":"[06:59:59] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1298.645794215,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645835392,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645841032,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645845216,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645849471,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645871063,"data":"\n"}
+,{"stream_name":"stderr","time":1298.645875215,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645879311,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.64588316,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645887163,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stderr","time":1298.645891005,"data":"[07:00:11] Can't kekulize mol.  Unkekulized atoms: 4 22\n"}
+,{"stream_name":"stdout","time":1299.659750902,"data":"  350/400 molecules\n"}
+,{"stream_name":"stderr","time":1316.216521301,"data":"[07:00:28] Can't kekulize mol.  Unkekulized atoms: 2 22\n"}
+,{"stream_name":"stderr","time":1316.219436192,"data":"[07:00:28] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1316.219465273,"data":"\n"}
+,{"stream_name":"stderr","time":1316.21968418,"data":"[07:00:28] Can't kekulize mol.  Unkekulized atoms: 2 22\n"}
+,{"stream_name":"stderr","time":1316.219718254,"data":"[07:00:28] Can't kekulize mol.  Unkekulized atoms: 2 18\n"}
+,{"stream_name":"stderr","time":1336.950411585,"data":"[07:00:49] Tautomer enumeration stopped at 394 tautomers: max transforms reached\n"}
+,{"stream_name":"stderr","time":1336.950453969,"data":"\n"}
+,{"stream_name":"stderr","time":1336.950460118,"data":"[07:00:49] Tautomer enumeration stopped at 394 tautomers: max transforms reached\n"}
+,{"stream_name":"stdout","time":1338.766001141,"data":"  400/400 molecules\n"}
+,{"stream_name":"stdout","time":1338.797590575,"data":"Wrote 400 rows to submission.csv\n"}
+,{"stream_name":"stderr","time":1346.877468646,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":1346.877556845,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":1347.201637621,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":1347.201728945,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":1348.679340684,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":1349.366154052,"data":"[NbConvertApp] Writing 145110 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":1356.227576112,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":1359.548496925,"data":"[NbConvertApp] Writing 695783 bytes to __results__.html\n"}
+]

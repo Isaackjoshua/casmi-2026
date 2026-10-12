@@ -144,9 +144,17 @@ def predict_molecule(
                 # multi-fingerprint model. See
                 # multi_fingerprint.block_weighted_loglik for why the blocks
                 # are standardized before being combined.
-                mpacked, mmodel, mweight = multi
+                # (packed, model, weight) uses the three-family stack; a fourth
+                # element names the stack module, so the six-family one can be
+                # passed without changing any caller that does not use it.
+                if len(multi) == 4:
+                    mpacked, mmodel, mweight, stack = multi
+                    scorer = stack.block_weighted_loglik
+                else:
+                    mpacked, mmodel, mweight = multi
+                    scorer = block_weighted_loglik
                 mprobs = predict_bit_probs(mmodel, group, device).mean(axis=0)
-                loglik = block_weighted_loglik(probs, mprobs, mpacked[lo:hi], mweight)
+                loglik = scorer(probs, mprobs, mpacked[lo:hi], mweight)
             # Every candidate in the window is mass-consistent, so each has
             # real (if weak) evidence -- keep them all above zero.
             fused += (1 - alpha) * (MODEL_FLOOR + (1 - MODEL_FLOOR) * _normalize(loglik, 1.0))

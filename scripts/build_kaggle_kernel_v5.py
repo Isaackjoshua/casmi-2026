@@ -42,6 +42,7 @@ SOURCE_FILES = [
     "src/peak_transformer.py",
     "src/pipeline_v3.py",
     "src/multi_fingerprint.py",
+    "src/fp_stack2.py",
     "src/large_pool.py",
     "src/pipeline_v4.py",
     "src/submission.py",
@@ -56,6 +57,21 @@ _STRIP_PATTERNS = [
 # under a new alias has to be bound explicitly before that file's cell.
 ALIASES = {
     "src/pipeline_v4.py": "predict_curated = predict_molecule  # pipeline_v3's, before v4 rebinds the name\n",
+}
+
+# Flattening drops every module boundary, so fp_stack2's packed_many,
+# block_weighted_loglik, OFFSETS and TOTAL_BITS would silently overwrite
+# multi_fingerprint's. The v2 cell is emitted last among the two and its names
+# are immediately captured under unambiguous aliases, and _FP2 stands in for
+# the module object that pipeline_v3 expects in a 4-element `multi` tuple.
+POST_SOURCE = {
+    "src/fp_stack2.py": (
+        "import types as _types\n"
+        "_FP2 = _types.SimpleNamespace(\n"
+        "    block_weighted_loglik=block_weighted_loglik,\n"
+        "    OFFSETS=OFFSETS, TOTAL_BITS=TOTAL_BITS, unpack=unpack)\n"
+        "fp2_packed_many = packed_many\n"
+    ),
 }
 
 
@@ -122,6 +138,8 @@ def build_notebook():
         if rel_path in ALIASES:
             cells.append(_code_cell(ALIASES[rel_path]))
         cells.append(_code_cell(_clean(raw)))
+        if rel_path in POST_SOURCE:
+            cells.append(_code_cell(POST_SOURCE[rel_path]))
 
     cells.append(_markdown_cell("## Run on the real competition data"))
     cells.append(
@@ -141,8 +159,13 @@ def build_notebook():
             f'"/kaggle/input/datasets/{MODEL_DATASET}/peak_model_l_tan.pt"]\n'
             f'# Loaded separately, never inside the ensemble -- it has 3239 output\n'
             f'# bits, not 2048, so averaging it with the others is not meaningful.\n'
-            f'MULTI_MODEL_PATH = "/kaggle/input/datasets/{MODEL_DATASET}/multi_model_e8.pt"\n'
-            f'MULTI_BLOCK_WEIGHT = 0.3\n\n'
+            f'# Six fingerprint families (Morgan r2/r3, MACCS, atom-pair, topological\n'
+            f'# torsion, feature-Morgan; 9383 bits). Against Morgan-r2-only scoring,\n'
+            f'# paired per molecule on 2500 held-out spectraverse structures:\n'
+            f'#   three families (multi_model_e8)  +0.0109 +/- 0.0067   -> scored 0.245\n'
+            f'#   six families   (fp2_model_e6)    +0.0360 +/- 0.0093\n'
+            f'MULTI_MODEL_PATH = "/kaggle/input/datasets/{MODEL_DATASET}/fp2_model_e6.pt"\n'
+            f'MULTI_BLOCK_WEIGHT = 0.2\n\n'
             'train = pd.read_parquet(f"{DATA_DIR}/train.parquet")\n'
             'test = pd.read_parquet(f"{DATA_DIR}/test.parquet")\n\n'
             'lib_sources = ["enveda-180", "enveda-np-examples", "gnps", "riken", "pluskal_ms2", '
@@ -176,12 +199,13 @@ def build_notebook():
             "    import multiprocessing as _mp\n"
             "    _w = max(1, _mp.cpu_count())\n"
             "    _t = time.time()\n"
-            "    pool_multi, _ok = packed_many(list(pool.normalized_smiles), workers=_w)\n"
+            "    pool_multi, _ok = fp2_packed_many(list(pool.normalized_smiles), workers=_w)\n"
             '    print(f"pool multi-fingerprints: {_ok.sum():,}/{len(_ok):,} in '
             '{time.time()-_t:.0f}s on {_w} workers", flush=True)\n'
             "    multi_model = load_fingerprint_model(MULTI_MODEL_PATH, device)\n"
-            "    multi = (pool_multi, multi_model, MULTI_BLOCK_WEIGHT)\n"
-            '    print(f"multi-fingerprint scoring on at block weight {MULTI_BLOCK_WEIGHT}", '
+            "    multi = (pool_multi, multi_model, MULTI_BLOCK_WEIGHT, _FP2)\n"
+            '    print(f"multi-fingerprint scoring ON: {_FP2.TOTAL_BITS} bits, '
+            '{len(_FP2.OFFSETS)} families, block weight {MULTI_BLOCK_WEIGHT}", '
             "flush=True)\n"
             "except Exception as e:\n"
             "    print(f'WARNING: multi-fingerprint scoring unavailable "

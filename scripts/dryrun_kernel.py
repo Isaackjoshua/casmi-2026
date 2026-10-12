@@ -29,6 +29,7 @@ LOCAL_PATHS = {
     '"/kaggle/input/datasets/isaackjoshua/casmi26-fp-model/peak_model_l.pt"': f'"{ROOT}/data/processed/peak_model_l.pt"',
     '"/kaggle/input/datasets/isaackjoshua/casmi26-fp-model/peak_model_l_tan.pt"': f'"{ROOT}/data/processed/peak_model_l_tan.pt"',
     '"/kaggle/input/datasets/isaackjoshua/casmi26-fp-model/multi_model_e8.pt"': f'"{ROOT}/data/processed/multi_model_e8.pt"',
+    '"/kaggle/input/datasets/isaackjoshua/casmi26-fp-model/fp2_model_e6.pt"': f'"{ROOT}/kaggle_model_dataset/fp2_model_e6.pt"',
 }
 
 

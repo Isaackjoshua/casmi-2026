@@ -29,12 +29,25 @@ its fingerprints (`candidate_fingerprints.parquet`, `pool_multi_fp.npy`,
 `data/pubchem/`. Also safe: everything pushed to git, and everything already
 on Kaggle (datasets, kernel versions, submissions).
 
-**Resume the only long job — training.** Checkpoints are written every epoch,
-so point `--resume` at the same prefix and it continues from the highest one:
+**Resume the only long job — training.** One command, safe to run at any
+time; it reports and does nothing if training is already alive:
 
 ```bash
 cd ~/Desktop/isaack/casmi-2026
-PYTHONPATH=. python3 scripts/train_multi_fingerprint.py --stack v2 --epochs 8 --resume
+bash scripts/resume_training.sh        # v2 stack; pass v1 for the other
+```
+
+Do not count on the process itself surviving. Backgrounded training here has
+*not* reliably outlived a session ending — the v1 run came through several,
+the v2 run died mid-epoch and sat dead for six days looking alive to a
+careless `pgrep` (the pattern matched the checking command's own command
+line; `pgrep -f "train_multi[_]fingerprint"` avoids that). Per-epoch
+checkpoints plus `--resume` are the mechanism that actually works, and a
+restart costs at most the epoch in progress. To check for real, compare the
+log's mtime against the clock rather than trusting that a process exists:
+
+```bash
+ls -la --time-style=+%F_%T logs/train_fp2*.log | tail -2; date +%F_%T
 ```
 
 It prints which checkpoint it resumed from and which epoch it continues at.

@@ -183,7 +183,10 @@ def main():
                          'standardizes each and splits the weight')
     ap.add_argument("--block", default="all",
                     help='"all", or a comma-separated list of family names to ablate '
-                         '(e.g. "morgan3" or "atompair,torsion")')
+                         '(e.g. "morgan3" or "atompair,torsion"). Several sets may be '
+                         'given separated by ";", which is far cheaper than one '
+                         'invocation each: the shipped baseline is computed once and '
+                         'reused for every set.')
     ap.add_argument("--sources", default="massbank,mona",
                     help="which libraries to draw the held-out molecules from. The "
                          "massbank/mona pool is only 2095 structures, so asking for more "
@@ -241,22 +244,27 @@ def main():
         if not path.exists():
             continue
         mm = load_fingerprint_model(str(path), device)
-        modes = [("multi", None), ("hybrid", None)]
-        modes += [(f"w={w}", w) for w in [float(x) for x in args.weights.split(",")]]
-        for label, bw in modes:
+        blocksets = [b.strip() for b in args.block.split(";") if b.strip()]
+        modes = [("multi", None, blocksets[0]), ("hybrid", None, blocksets[0])]
+        modes += [(f"w={w}", w, bs)
+                  for bs in blocksets
+                  for w in [float(x) for x in args.weights.split(",")]]
+        for label, bw, bset in modes:
             mode = "multi" if label == "multi" else "hybrid"
+            if len(blocksets) > 1 and bw is not None:
+                label = f"{label} [{bset}]"
             t0 = time.time()
             res = {k: reciprocal_rank(
                 predict_molecule_scored(g.to_dict("records"), lib, pool, mpacked, device, ALPHA,
                                         base_model=base_model, multi_model=mm, mode=mode,
-                                        block_weight=bw, block=args.block,
+                                        block_weight=bw, block=bset,
                                         rule=args.rule), k)
                 for k, g in groups}
             d = np.array([res[k] - base[k] for k, _ in groups])
             ci = 1.96 * d.std(ddof=1) / np.sqrt(len(d))
             sig = abs(d.mean()) > ci
             verdict = ("BETTER" if d.mean() > 0 else "worse") if sig else "ns"
-            print(f"{ckpt_prefix+'_e'+str(e):22s} {label:8s} "
+            print(f"{ckpt_prefix+'_e'+str(e):16s} {label:34s} "
                   f"{np.mean(list(res.values())):7.4f} {d.mean():+12.4f} {ci:9.4f}  {verdict}"
                   f"  ({time.time()-t0:.0f}s)", flush=True)
         del mm
